@@ -78,7 +78,7 @@ Options marked with (*) are not implemented yet.
 * Audio Playback [Working]
 * Usage of UDP for transporting media data [Working]
 * Support for Opus [patches welcome]
-* Synchronous playback retaining audio quality, resample using libsoxr  [patches welcome]
+* Synchronous playback retaining audio quality, resample using libsoxr  [Working]
 * Support for Snapcast android app [patches welcome]
 * implement missing command line options [patches welcome]
 
