@@ -15,7 +15,12 @@ Linux. Patches for other platforms are welcome.
 
 ### Low Latency
 
-Latency is induced by snapcast to compensate short network outages.
+* Latency is induced by snapcast to compensate short network outages. 
+* The design of snapcast (reading from an input pipe) induces significant 
+  latency. Pipes in Linux by default buffer up to 4MB of data. This is well 
+  above 23 seconds worth of audio data for 44100:16:2 format. On my machine I can 
+  see that once in a while the input pipe will not be read for multiple seconds. 
+  To compensate I am running snapcast with a very large buffer.
 
 ### Low CPU Usage
 
@@ -50,7 +55,7 @@ Options marked with (*) are not implemented yet.
 
 I am starting snapserver like this:
 ```
-snapserver -b 15000 -s 4800:16:2 -c opus
+snapcast-server -b 1000 -s /tmp/snapfifo -s 48000:16:2 -c opus
 ```
 
 
@@ -113,9 +118,9 @@ to build and install the program.
 * servers maintain a list of clients that have recently checked in
 * when playing data, it is sent to each client using unicast UDP
 * every hello is replied with the current time
-* ever data packet has a sequence number
+* every data packet has a sequence number
 * when a client receives a sequence number n+1 but has not received m it will 
-  REQUEST missing packets from the server (we could also check every 100ms or 
+  REQUEST missing packets from the server (we could also check every 100ms for 
   missing packets)
 
 
