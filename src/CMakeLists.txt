@@ -13,9 +13,10 @@ add_executable(snapcast-client client.c util.c taskqueue.c util.c timespec.c
 
 
 target_link_libraries(snapcast-server ${JSON_C_LIBRARIES})
-target_link_libraries(snapcast-server ${ALSA_LIBRARIES})      
 target_link_libraries(snapcast-client ${JSON_C_LIBRARIES})
 target_link_libraries(snapcast-client ${ALSA_LIBRARIES})      
+target_link_libraries(snapcast-client soxr)
+target_link_libraries(snapcast-client rubberband)
 
 #set_target_properties(snapcastc PROPERTIES COMPILE_FLAGS "-std=gnu11 -Wall -fsanitize=address" LINK_FLAGS " -fno-omit-frame-pointer -fsanitize=address -static-libasan")
 set_target_properties(snapcast-client PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "")

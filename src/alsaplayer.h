@@ -25,6 +25,8 @@
 */
 #pragma once
 
+#include "taskqueue.h"
+
 #include <alsa/asoundlib.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -45,13 +47,16 @@ typedef struct {
 
 	int pollfd_count;
 	struct pollfd *ufds;
+	struct pollfd *main_poll_fd;
 
 	bool initialized;
 	bool playing;
 	size_t empty_chunks_in_row;
+	taskqueue_t *close_task;
 } alsaplayer_ctx;
 
 void alsaplayer_handle(alsaplayer_ctx *ctx);
 void alsaplayer_init(alsaplayer_ctx *ctx);
 void alsaplayer_uninit(alsaplayer_ctx *ctx);
+void init_alsafd();
 bool is_alsafd(const int fd, const alsaplayer_ctx *ctx);

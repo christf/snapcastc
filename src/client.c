@@ -59,6 +59,12 @@ void loop() {
 	struct pollfd fds[snapctx.alsaplayer_ctx.pollfd_count + 2];  // allocate fds for alsa events
 
 	int fd_index = 0;
+	snapctx.alsaplayer_ctx.main_poll_fd = fds; // alsa fds must be the first
+
+	init_alsafd(&snapctx.alsaplayer_ctx);
+	fd_index += snapctx.alsaplayer_ctx.pollfd_count;
+
+
 	fds[fd_index].fd = snapctx.taskqueue_ctx.fd;
 	fds[fd_index].events = POLLIN;
 	fd_index++;
@@ -66,13 +72,7 @@ void loop() {
 	fds[fd_index].events = POLLIN;
 	fd_index++;
 
-	for (int i = 0; i < snapctx.alsaplayer_ctx.pollfd_count; i++) {
-		struct pollfd *pfd = &snapctx.alsaplayer_ctx.ufds[i];
-		fds[i + fd_index].fd = pfd->fd;
-		fds[i + fd_index].events = POLLIN;
-	}
 
-	fd_index += snapctx.alsaplayer_ctx.pollfd_count;
 
 	log_verbose("starting loop\n");
 
@@ -101,6 +101,11 @@ void loop() {
 				} else if ((fds[i].revents & POLLIN) && (fds[i].fd == snapctx.intercom_ctx.fd)) {
 					log_debug("intercom ready for IO\n");
 					intercom_handle_in(&snapctx.intercom_ctx, fds[i].fd);
+					if (!snapctx.alsaplayer_ctx.initialized) {
+						log_error("initializing alsa\n");
+						alsaplayer_init(&snapctx.alsaplayer_ctx);
+						init_alsafd(&snapctx.alsaplayer_ctx);
+					}
 				} else if ((fds[i].revents & POLLOUT) && (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx))) {
 					log_debug("alsa device ready for IO\n");
 					alsaplayer_handle(&snapctx.alsaplayer_ctx);
@@ -131,6 +136,7 @@ int main(int argc, char *argv[]) {
 	snapctx.debug = false;
 
 	// TODO: read these from stream URI
+	snapctx.alsaplayer_ctx.initialized = false;
 	snapctx.alsaplayer_ctx.rate = FREQUENCY;
 	snapctx.alsaplayer_ctx.channels = CHANNELS;
 	snapctx.alsaplayer_ctx.frame_size = SAMPLESIZE;
