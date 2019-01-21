@@ -59,6 +59,12 @@ void loop() {
 	struct pollfd fds[snapctx.alsaplayer_ctx.pollfd_count + 2];  // allocate fds for alsa events
 
 	int fd_index = 0;
+	snapctx.alsaplayer_ctx.main_poll_fd = fds; // alsa fds must be the first
+
+	init_alsafd(&snapctx.alsaplayer_ctx);
+	fd_index += snapctx.alsaplayer_ctx.pollfd_count;
+
+
 	fds[fd_index].fd = snapctx.taskqueue_ctx.fd;
 	fds[fd_index].events = POLLIN;
 	fd_index++;
@@ -66,13 +72,7 @@ void loop() {
 	fds[fd_index].events = POLLIN;
 	fd_index++;
 
-	for (int i = 0; i < snapctx.alsaplayer_ctx.pollfd_count; i++) {
-		struct pollfd *pfd = &snapctx.alsaplayer_ctx.ufds[i];
-		fds[i + fd_index].fd = pfd->fd;
-		fds[i + fd_index].events = POLLIN;
-	}
 
-	fd_index += snapctx.alsaplayer_ctx.pollfd_count;
 
 	log_verbose("starting loop\n");
 
@@ -101,6 +101,11 @@ void loop() {
 				} else if ((fds[i].revents & POLLIN) && (fds[i].fd == snapctx.intercom_ctx.fd)) {
 					log_debug("intercom ready for IO\n");
 					intercom_handle_in(&snapctx.intercom_ctx, fds[i].fd);
+					if (!snapctx.alsaplayer_ctx.initialized) {
+						log_error("initializing alsa\n");
+						alsaplayer_init(&snapctx.alsaplayer_ctx);
+						init_alsafd(&snapctx.alsaplayer_ctx);
+					}
 				} else if ((fds[i].revents & POLLOUT) && (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx))) {
 					log_debug("alsa device ready for IO\n");
 					alsaplayer_handle(&snapctx.alsaplayer_ctx);
@@ -125,12 +130,14 @@ void catch_sigterm() {
 }
 
 #include "pcmchunk.h"
+#include "alsaplayer.h"
 
 int main(int argc, char *argv[]) {
 	snapctx.verbose = false;
 	snapctx.debug = false;
 
 	// TODO: read these from stream URI
+	snapctx.alsaplayer_ctx.initialized = false;
 	snapctx.alsaplayer_ctx.rate = FREQUENCY;
 	snapctx.alsaplayer_ctx.channels = CHANNELS;
 	snapctx.alsaplayer_ctx.frame_size = SAMPLESIZE;
@@ -146,13 +153,19 @@ int main(int argc, char *argv[]) {
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
 	int c;
-	while ((c = getopt_long(argc, argv, "VvdhH:p:", long_options, &option_index)) != -1) {
+	while ((c = getopt_long(argc, argv, "lVvdhH:p:s:", long_options, &option_index)) != -1) {
 		switch (c) {
 			case 'V':
 				printf("snapclient %s\n", SOURCE_VERSION);
 #if defined(GIT_BRANCH) && defined(GIT_COMMIT_HASH)
 				printf("branch: %s\n commit: %s\n", GIT_BRANCH, GIT_COMMIT_HASH);
 #endif
+				exit(EXIT_SUCCESS);
+			case 's':
+				snapctx.alsaplayer_ctx.pcm.name = strdupa(optarg);
+				break;
+			case 'l':
+				alsaplayer_pcm_list();
 				exit(EXIT_SUCCESS);
 			case 'p':
 				snapctx.intercom_ctx.port = atoi(optarg);

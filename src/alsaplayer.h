@@ -32,6 +32,12 @@
 #include <sys/types.h>
 
 typedef struct {
+	char *name;
+	int id;
+	char *description;
+} pcm;
+
+typedef struct {
 	struct snapctx *snapctx;
 
 	char *playnext;
@@ -53,10 +59,12 @@ typedef struct {
 	bool playing;
 	size_t empty_chunks_in_row;
 	taskqueue_t *close_task;
+	pcm pcm;
 } alsaplayer_ctx;
 
 void alsaplayer_handle(alsaplayer_ctx *ctx);
 void alsaplayer_init(alsaplayer_ctx *ctx);
 void alsaplayer_uninit(alsaplayer_ctx *ctx);
 void init_alsafd();
+void alsaplayer_pcm_list();
 bool is_alsafd(const int fd, const alsaplayer_ctx *ctx);

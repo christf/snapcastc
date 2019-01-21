@@ -5,8 +5,8 @@
 #include "util.h"
 
 #include <alsa/asoundlib.h>
-//#include <soxr.h>
-// #include <rubberband/rubberband-c.h>
+#include <soxr.h>
+//#include <rubberband/rubberband-c.h>
 #include <stdio.h>
 
 #include "timespec.h"
@@ -14,39 +14,29 @@
 #define PCM_DEVICE "default"
 #define PERIOD_TIME 30000
 
-// TODO: adjust speed without changing the pitch
-bool resample(pcmChunk *chunk, double factor) {
-	uint16_t inframes = chunk->size / chunk->channels / chunk->frame_size;
-	uint16_t outframes = chunk->size / chunk->channels / chunk->frame_size * factor;
-	if (inframes == outframes || chunk->play_at.tv_sec == 0) {
-		// do not call sox when resampling would not have an effect
-		log_error("skipping resample\n");
-		return false;
-	}
-	return true;
-}
-void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 
-	if (!resample(chunk, factor)) {
-		memcpy(out, chunk->data, chunk->size);
-		return;
-	}
-
-	uint16_t inframes = chunk->size / chunk->channels / chunk->frame_size;
-	uint16_t outframes = chunk->size / chunk->channels / chunk->frame_size * factor;
-
-	if (factor <= 1)
-		memcpy(out, chunk->data, outframes * chunk->channels * chunk->frame_size);
-	else if (factor > 1) {
-		memcpy(&out[chunk->channels*chunk->frame_size], chunk->data, chunk->size);
-		memcpy(out, chunk->data, chunk->frame_size * chunk->channels);
-	}
-
-	uint16_t olen =  chunk->size / chunk->channels / chunk->frame_size * factor;
-	log_error("adjusted frame with len: %d to olen: %d\n", chunk->size, olen);
-	chunk->size =  chunk->size / chunk->channels / chunk->frame_size * factor;
-}
+// soxr could be interesting. I am under the impression it changes pitch though
 /*
+void adjust_speed(pcmChunk *chunk, char *out, double factor) {
+	// TODO: get rid of this and use a proper library that allows adjusting playback lengths without changing pitch
+	uint16_t inframes = chunk->size / chunk->channels / chunk->frame_size;
+	uint16_t outframes = inframes + ( factor > 1 ? 2: (factor == 1 ? 0 : -2));
+
+	if (factor <= 1) {
+		memcpy(out, chunk->data, outframes * chunk->channels * chunk->frame_size);
+	}
+	else if (factor > 1) {
+		memcpy(&out[2 * chunk->channels*chunk->frame_size], chunk->data, chunk->size);
+		memcpy(out, chunk->data, 2 * chunk->frame_size * chunk->channels); // duplicate the first frames
+	}
+
+	uint16_t olen =  outframes * chunk->channels * chunk->frame_size ;
+	log_error("adjusted frame with len: %d to olen: %d\n", chunk->size, olen);
+	chunk->size = olen;
+}
+*/
+/*
+// librubberband may get more interesting when compressing data. feeding 2048 samples at a time is out of question when using PCM, UDP and float
 void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 
 	if (!resample(chunk, factor)) {
@@ -73,17 +63,12 @@ void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 	chunk->size = outframes * chunk->channels * chunk->frame_size;
 }
 */
-/*
+
 void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 	double orate = chunk->samples * factor;
 	size_t olen = (size_t)(chunk->size * orate / chunk->samples + .5);
 	size_t odone;
-
-	if (!resample(chunk, factor)) {
-		memcpy(out, chunk->data, chunk->size);
-		return;
-	}
-
+	
 	soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_MQ, 0);
 	soxr_io_spec_t io_spec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);  // TODO this should not be hard-coded.
 
@@ -92,10 +77,10 @@ void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 					  out, olen, &odone,							// Output.
 					  &io_spec, &quality_spec, NULL);					// Default configuration.
 
-	log_error("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
+	log_verbose("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
 	chunk->size = olen;
 }
-*/
+
 int getchunk(char *buf, int buffsize, size_t delay_frames) {
 	const double adjustment = 0.01;
 	double factor = 1;
@@ -131,7 +116,7 @@ int getchunk(char *buf, int buffsize, size_t delay_frames) {
 
 	if (!is_near) {
 		factor = 1 - adjustment * tdiff.sign;
-		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
+		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 10000000L);
 		if (! not_even_close) {
 			log_error("HAHA not even close, dropping chunk!\n");
 			snapctx.alsaplayer_ctx.playing = false;
@@ -186,6 +171,44 @@ void alsaplayer_uninit_task(void *d) {
 	alsaplayer_uninit(&snapctx.alsaplayer_ctx);
 }
 
+void alsaplayer_pcm_list() {
+	void **hints, **n;
+	char *name, *descr, *io;
+	pcm pcmDevice;
+
+	if (snd_device_name_hint(-1, "pcm", &hints) < 0)
+		return;
+	n = hints;
+	size_t idx = 0;
+	while (*n != NULL) {
+		name = snd_device_name_get_hint(*n, "NAME");
+		descr = snd_device_name_get_hint(*n, "DESC");
+		io = snd_device_name_get_hint(*n, "IOID");
+		if (io != NULL && strcmp(io, "Output") != 0)
+			goto __end;
+		pcmDevice.name = name;
+		
+		if (descr == NULL) {
+			pcmDevice.description = "";
+		} else {
+			pcmDevice.description = descr;
+		}
+		pcmDevice.id = idx++;
+		log_error("PCM DEVICE name: %s id: %d description: %s\n", pcmDevice.name, pcmDevice.id, pcmDevice.description);
+
+	__end:
+		if (name != NULL)
+			free(name);
+		if (descr != NULL)
+			free(descr);
+		if (io != NULL)
+			free(io);
+		n++;
+	}
+	snd_device_name_free_hint(hints);
+}
+
+
 void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	if (!ctx->initialized)
 		return;
@@ -207,66 +230,33 @@ void init_alsafd(alsaplayer_ctx *ctx) {
 		ctx->main_poll_fd[i].events = POLLIN;
 	}
 }
-
-/*
-vector<PcmDevice> AlsaPlayer::pcm_list(void) {
-	void **hints, **n;
-	char *name, *descr, *io;
-	vector<PcmDevice> result;
-	PcmDevice pcmDevice;
-
-	if (snd_device_name_hint(-1, "pcm", &hints) < 0)
-		return result;
-	n = hints;
-	size_t idx(0);
-	while (*n != NULL) {
-		name = snd_device_name_get_hint(*n, "NAME");
-		descr = snd_device_name_get_hint(*n, "DESC");
-		io = snd_device_name_get_hint(*n, "IOID");
-		if (io != NULL && strcmp(io, "Output") != 0)
-			goto __end;
-		pcmDevice.name = name;
-		if (descr == NULL) {
-			pcmDevice.description = "";
-		} else {
-			pcmDevice.description = descr;
-		}
-		pcmDevice.idx = idx++;
-		result.push_back(pcmDevice);
-
-	__end:
-		if (name != NULL)
-			free(name);
-		if (descr != NULL)
-			free(descr);
-		if (io != NULL)
-			free(io);
-		n++;
+/* shamelessly stolen from snapcast
+	void adjustVolume(char *buffer, size_t count, double volume)
+	{
+		T* bufferT = (T*)buffer;
+		for (size_t n=0; n<count; ++n)
+			bufferT[n] = endian::swap<T>(endian::swap<T>(bufferT[n]) * volume);
 	}
-	snd_device_name_free_hint(hints);
-	return result;
-}
 */
+
 void alsaplayer_init(alsaplayer_ctx *ctx) {
 	unsigned int pcm, tmp;
 	int err;
-
-	ctx->close_task = post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms * 1.2 ) / 1000 , (int)(snapctx.bufferms * 1.2) % 1000, alsaplayer_uninit_task, NULL, NULL);
 
 	ctx->empty_chunks_in_row = 0;
 	ctx->playing = false;
 
 	if (ctx->initialized)
 		return;
-
-	// TODO: playnext is to be used from outside. allocation should not happen here.
-	// FIXME: the size of that buffer is questionable - it is 1s - the amount of frames to be played is different
-	ctx->playnext = snap_alloc(ctx->rate * ctx->channels * ctx->frame_size);
+	
+	ctx->close_task = post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms * 1.2 ) / 1000 , (int)(snapctx.bufferms * 1.2) % 1000, alsaplayer_uninit_task, NULL, NULL);
+	
+	alsaplayer_pcm_list();
 
 	int buff_size;
 
 	ctx->pcm_handle = NULL;
-	if ((pcm = snd_pcm_open(&ctx->pcm_handle, PCM_DEVICE, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0)
+	if ((pcm = snd_pcm_open(&ctx->pcm_handle, ctx->pcm.name, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0)
 		log_error("ERROR: Cannot open \"%s\" PCM device. %s\n", PCM_DEVICE, snd_strerror(pcm));
 
 	snd_pcm_hw_params_alloca(&ctx->params);
@@ -317,9 +307,11 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	log_verbose("rate: %d bps\n", tmp);
 
 	snd_pcm_hw_params_get_period_size(ctx->params, &ctx->frames, 0);
+	log_verbose("frames: %d\n", &ctx->frames);
 
 	buff_size = ctx->frames * ctx->channels * ctx->frame_size /* 2 -> sample size */;
 	log_verbose("alsa requested buff_size: %d\n", buff_size);
+	ctx->playnext = snap_alloc(buff_size);
 
 	snd_pcm_hw_params_get_period_time(ctx->params, &tmp, NULL);
 	log_verbose("period time: %d\n", tmp);

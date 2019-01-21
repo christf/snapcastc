@@ -66,8 +66,8 @@ Allowed options:
   -V, --version                   show version number
   -v                              verbose output
   -d                              debug output
-  -l, --list                      list pcm devices *
-  -s, --soundcard arg (=default)  index or name of the soundcard *
+  -l                              list pcm devices
+  -s,                             index or name of the soundcard
   -e, --mstderr                   send metadata to stderr *
   -H, --host arg                  server hostname or ip address
   -p (=1704)                      local port
