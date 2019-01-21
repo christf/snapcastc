@@ -14,6 +14,9 @@
 #define PCM_DEVICE "default"
 #define PERIOD_TIME 30000
 
+// look at af_scaletempo.c from mplayer
+
+
 
 // soxr could be interesting. I am under the impression it changes pitch though
 /*
@@ -121,7 +124,6 @@ int getchunk(char *buf, int buffsize, size_t delay_frames) {
 			log_error("HAHA not even close, dropping chunk!\n");
 			snapctx.alsaplayer_ctx.playing = false;
 			snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
-			return 0;
 		}
 	}
 
@@ -149,7 +151,6 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 
 	if ((chunksize = getchunk(ctx->playnext, buff_size, delayp)) == 0) {
 		log_error("end of data\n");  // TODO: schedule job to close alsa socket in alsatimeout ms. - still keep the sleep to reduce cpu
-		return;
 	}
 
 	if ((pcm = snd_pcm_writei(ctx->pcm_handle, ctx->playnext, chunksize / ctx->channels / ctx->frame_size)) == -EPIPE) {
@@ -230,14 +231,13 @@ void init_alsafd(alsaplayer_ctx *ctx) {
 		ctx->main_poll_fd[i].events = POLLIN;
 	}
 }
-/* shamelessly stolen from snapcast
-	void adjustVolume(char *buffer, size_t count, double volume)
-	{
-		T* bufferT = (T*)buffer;
-		for (size_t n=0; n<count; ++n)
-			bufferT[n] = endian::swap<T>(endian::swap<T>(bufferT[n]) * volume);
-	}
-*/
+
+// shamelessly stolen from snapcast, however removing the endian adjustment
+void adjustVolume(unsigned char *buffer, size_t count, double volume)
+{
+for (size_t n=0; n<count; ++n)
+	buffer[n] = (buffer[n]) * volume;
+}
 
 void alsaplayer_init(alsaplayer_ctx *ctx) {
 	unsigned int pcm, tmp;
@@ -251,7 +251,6 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	
 	ctx->close_task = post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms * 1.2 ) / 1000 , (int)(snapctx.bufferms * 1.2) % 1000, alsaplayer_uninit_task, NULL, NULL);
 	
-	alsaplayer_pcm_list();
 
 	int buff_size;
 
