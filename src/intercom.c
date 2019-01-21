@@ -377,7 +377,7 @@ bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int por
 	data->packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_hello));
 
 	data->packet_len = assemble_header(&((intercom_packet_op *)data->packet)->hdr, CLIENT_OPERATION);
-	data->packet_len += assemble_hello((void *)(data->packet) + data->packet_len);
+	data->packet_len += assemble_hello((void *)(&data->packet[data->packet_len]));
 
 	data->retries_left = 12;  // hellos will never stop repeating because the task will increment this value. Just set it to something above 0
 	data->check_task = NULL;

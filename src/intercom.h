@@ -28,7 +28,7 @@ typedef struct __attribute__((__packed__)) {
 typedef struct __attribute__((__packed__)) {
 	uint8_t type;
 	uint8_t length;
-	// after this a dynamic buffer is appended to hold the client name
+	uint32_t node_id;
 } tlv_hello;
 
 typedef struct __attribute__((__packed__)) {
@@ -48,6 +48,7 @@ typedef struct __attribute__((__packed__)) {
 
 typedef struct __attribute__((__packed__)) {
 	intercom_packet_hdr hdr;
+	// uint16_t bufferms;
 	// after this a dynamic buffer is appended to hold TLV.
 } intercom_packet_audio;
 
