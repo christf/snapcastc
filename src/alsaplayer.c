@@ -119,7 +119,7 @@ int getchunk(char *buf, int buffsize, size_t delay_frames) {
 
 	if (!is_near) {
 		factor = 1 - adjustment * tdiff.sign;
-		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 10000000L);
+		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (! not_even_close) {
 			log_error("HAHA not even close, dropping chunk!\n");
 			snapctx.alsaplayer_ctx.playing = false;
