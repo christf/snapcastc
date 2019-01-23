@@ -88,7 +88,6 @@ void adjust_speed(pcmChunk *chunk, double factor) {
 	chunk->size = olen;
 }
 
-// TODO: getchunk should return a pcmChunk
 int getchunk(pcmChunk *p, size_t delay_frames) {
 	const double adjustment = 0.01;
 	double factor = 1;
@@ -225,7 +224,7 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	free(ctx->ufds);
 
 	for (int i = 0; i < ctx->pollfd_count; i++) {
-		log_error("size: %d %d %d\n", i, sizeof(*(ctx->main_poll_fd)) , sizeof(struct pollfd)) ;
+		log_debug("size: %d %d %d\n", i, sizeof(*(ctx->main_poll_fd)) , sizeof(struct pollfd)) ;
 		ctx->main_poll_fd[i].fd = - (ctx->main_poll_fd[i]).fd;
 	}
 }

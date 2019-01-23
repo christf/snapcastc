@@ -13,10 +13,14 @@
 #define PACKET_FORMAT_VERSION 1
 #define CLIENTNAME_MAXLEN
 
-enum { CLIENT_OPERATION, AUDIO_DATA, SERVER_OPERATION };  //
-enum { REQUEST, HELLO };				  // TLV - types for client operations
-enum { STREAM_INFO };					  // TLV - server operations
-enum { AUDIO_PCM, AUDIO_OPUS, AUDIO_OGG, AUDIO_FLAC };    // TLV type for codec
+enum { CLIENT_OPERATION, AUDIO_DATA, SERVER_OPERATION };  // Packet types
+enum { REQUEST, HELLO };				  // TLV types client op
+enum { AUDIO,
+       AUDIO_PCM,
+       AUDIO_OPUS,
+       AUDIO_OGG,
+       AUDIO_FLAC };   // TLV type for UDIO packets, AUDIO will be obsoleted by the more specific types once implemented.
+enum { STREAM_INFO };  // TLV - types for server op
 
 typedef struct __attribute__((__packed__)) {
 	uint8_t version;
@@ -48,7 +52,7 @@ typedef struct __attribute__((__packed__)) {
 
 typedef struct __attribute__((__packed__)) {
 	intercom_packet_hdr hdr;
-	// uint16_t bufferms;
+	uint16_t bufferms;
 	// after this a dynamic buffer is appended to hold TLV.
 } intercom_packet_audio;
 
@@ -79,12 +83,12 @@ typedef struct {
 	uint16_t serverport;
 	uint32_t nodeid;
 	int mtu;
+	int buffer_wraparound;
 
 	size_t bufferwindex;
 	size_t buffer_elements;
 	size_t bufferrindex;
 	size_t lastreceviedseqno;
-	int buffer_wraparound;
 	void *buffer;
 
 } intercom_ctx;

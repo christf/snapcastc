@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <sys/time.h>
 
-typedef struct {
+typedef struct  __attribute__((__packed__)) {
 	struct timespec play_at;
 	uint32_t samples;
 	uint8_t frame_size;

@@ -95,6 +95,9 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 			  count, ctx->state, PLAYING, IDLE);
 		print_packet(ctx->chunk.data, ctx->chunk.size);
 		ctx->chunk.size = ctx->data_read;
+		ctx->chunk.frame_size = snapctx.frame_size;
+		ctx->chunk.samples = snapctx.samples;
+		ctx->chunk.channels = snapctx.channels;
 		ctx->data_read = 0;
 		return 1;
 	}
