@@ -21,57 +21,47 @@ struct client *findinvector(void *_vector, const uint32_t id) {
 	return NULL;
 }
 
-void client_update_lastseen(client_t *client) {
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	client->lastseen.tv_sec = tv.tv_sec;
-	client->lastseen.tv_nsec = tv.tv_usec * 1000;
-}
-
 void schedule_delete_client(void *d) {
 	uint32_t *id = d;
 	clientmgr_delete_client(&snapctx.clientmgr_ctx, *id);
 }
 
-client_t new_client(const uint32_t id, const struct in6_addr *ip, const uint16_t port) {
-	client_t ret = {};
-
-	char host[NI_MAXHOST] = {};
+client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip, const uint16_t port) {
 	struct sockaddr_in6 speer = {};
 
 	memcpy(&speer.sin6_addr, ip, sizeof(struct in6_addr));
 	speer.sin6_port = port;
 	speer.sin6_family = AF_INET6;
 
-	int s = getnameinfo((struct sockaddr *)&speer, 128, host, NI_MAXHOST, NULL, 0, 0);
+	ret->name[0] = '\0';
+	int s = getnameinfo((struct sockaddr *)&speer, 128, ret->name, NI_MAXHOST, NULL, 0, NI_NOFQDN);
 	if (s != 0)
 		log_error("getnameinfo: %s\n", gai_strerror(s));
 	else
-		log_verbose("hostname of peer: %s\n", host);
+		log_verbose("hostname of peer: %s\n", ret->name);
 
-	ret.name = strdup(host);
-	ret.port = port;
-	memcpy(&ret.ip, ip, sizeof(struct in6_addr));
-	ret.id = id;
+	ret->port = port;
+	memcpy(&ret->ip, ip, sizeof(struct in6_addr));
+	ret->id = id;
 
 	uint32_t *cid = snap_alloc(sizeof(uint32_t));
 	*cid = id;
-	ret.purge_task = post_task(&snapctx.taskqueue_ctx, 5, 0, schedule_delete_client, free, cid);
+	ret->purge_task = post_task(&snapctx.taskqueue_ctx, 5, 0, schedule_delete_client, free, cid);
 
-	VECTOR_ADD(snapctx.clientmgr_ctx.clients, ret);
+	VECTOR_ADD(snapctx.clientmgr_ctx.clients, *ret);
 
 	return ret;
 }
 
-void free_client_members(client_t *client) { free(client->name); }
+void free_client_members(client_t *client) { // free(client->name); 
+}
 
 struct client *get_client(const uint32_t id) {
 	return findinvector(&snapctx.clientmgr_ctx.clients, id);
 }
 
 void print_client(struct client *client) {
-	log_verbose("Client %s(%u) has IP %s, port %i and was last seen at: %lld.%.9ld\n", client->name, client->id, print_ip(&client->ip),
-		    client->port, client->lastseen.tv_sec, client->lastseen.tv_nsec);
+	log_verbose("Client %s(%u) has IP %s, port %i\n", client->name, client->id, print_ip(&client->ip), client->port);
 }
 
 /** Given a MAC address deletes a client. Safe to call if the client is not
@@ -86,7 +76,7 @@ void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t id) {
 		return;
 	}
 
-	log_verbose("\033[34mREMOVING client %s\033[0m\n", client->name);
+	log_verbose("\033[34mREMOVING client %d\033[0m\n", id);
 	print_client(client);
 
 	free_client_members(client);
@@ -117,12 +107,12 @@ bool clientmgr_refresh_client(struct client *client) {
 	if (!existingclient) {
 		// create new client
 		log_verbose("clientmgr: creating client: %u\n", client->id);
-		new_client(client->id, &client->ip, client->port);
+		client_t n_client = {};
+		new_client(&n_client, client->id, &client->ip, client->port);
 		existingclient = get_client(client->id);
 	}
 
 	log_verbose("clientmgr: refreshing client: %u\n", client->id);
-	client_update_lastseen(existingclient);
 	print_client(existingclient);
 	reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);
 

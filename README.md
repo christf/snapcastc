@@ -37,18 +37,14 @@ Allowed options:
   -V, --version                       Show version number
   -v                                  verbose output
   -d                                  debug output
-  -p, --port arg (=1704)              Server port *
-  --controlPort arg (=1705)           Remote control port *
-  -s, --stream arg (=pipe:///tmp/snapfifo?name=default) 
-                                      URI of the PCM input stream.
-                                      Format: TYPE://host/path?name=NAME
-                                      [&codec=CODEC]
-                                      [&sampleformat=SAMPLEFORMAT]
-  --sampleformat arg (=48000:16:2)    Default sample format *
+  -p <port>                           Server UDP port (default: 1704)
+  -P <port>                           Remote TCP control port (default: 1705)
+  -s <file>                           filename of the PCM input stream.
+  -f arg (=48000:16:2)                Sample format *
   -c, --codec arg (=flac)             Default transport codec *
                                       (flac|ogg|pcm)[:options]
                                       Type codec:? to get codec specific options
-  --streamBuffer arg (=20)            Default stream read buffer [ms] *
+  -B <read_ms>                        Default stream read buffer [ms] *
   -b, --buffer arg (=1000)            Buffer [ms]
 ```
 Options marked with (*) are not implemented yet.
@@ -68,12 +64,11 @@ Allowed options:
   -d                              debug output
   -l                              list pcm devices
   -s,                             index or name of the soundcard
-  -e, --mstderr                   send metadata to stderr *
   -H, --host arg                  server hostname or ip address
   -p (=1704)                      local port
-  -P (1704)                       server port *
+  -P (=1704)                      server port
   --latency arg (=0)              latency of the soundcard *
-  -i, --instance arg (=1)         instance id *
+  -i, --instance arg (=1)         instance id
 ```
 
 Options marked with (*) are not implemented yet.

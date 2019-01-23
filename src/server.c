@@ -97,10 +97,11 @@ void loop() {
 				if (ret == -1) {
 					del_fd(efd, snapctx.inputpipe_ctx.fd);
 					log_debug("throttling input from fifo\n");
-					post_task(&snapctx.taskqueue_ctx, 0, READMS, resume_read, NULL, &efd);
+					post_task(&snapctx.taskqueue_ctx, 0, snapctx.readms, resume_read, NULL, &efd);
 				} else if (ret == 1) {
 					// TODO: when full chunk was read, start encoder here
 					intercom_send_audio(&snapctx.intercom_ctx, &snapctx.inputpipe_ctx.chunk);
+					print_packet(snapctx.inputpipe_ctx.chunk.data, 960);
 				}
 			} else if ((snapctx.intercom_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				intercom_handle_in(&snapctx.intercom_ctx, events[i].data.fd);
@@ -116,7 +117,10 @@ void loop() {
 	free(events);
 }
 
-void usage() { puts("snapcast-server -b bufferMs -s <inputpipe>"); }
+void usage() {
+	// TODO: write complete help message
+	puts("snapcast-server -b bufferMs -s <inputpipe>");
+}
 
 void catch_sigterm() {
 	static struct sigaction _sigact;
@@ -136,15 +140,15 @@ int main(int argc, char *argv[]) {
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
 	snapctx.intercom_ctx.serverport = INTERCOM_PORT;
 
-	snapctx.samples = FREQUENCY;
-	snapctx.sample_size = SAMPLESIZE;
-	snapctx.channels = CHANNELS;
-	snapctx.readms = READMS;
+	snapctx.samples = 48000;  // set default
+	snapctx.frame_size = 2;   // set default
+	snapctx.channels = 2;     // set default
+	snapctx.readms = 5;       // set default
 
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
 	int c;
-	while ((c = getopt_long(argc, argv, "Vvdh:s:b:", long_options, &option_index)) != -1) switch (c) {
+	while ((c = getopt_long(argc, argv, "Vvdh:B:s:b:p:f:", long_options, &option_index)) != -1) switch (c) {
 			case 'V':
 				printf("snapclient %s\n", SOURCE_VERSION);
 #if defined(GIT_BRANCH) && defined(GIT_COMMIT_HASH)
@@ -157,12 +161,21 @@ int main(int argc, char *argv[]) {
 			case 'v':
 				snapctx.verbose = true;
 				break;
+			//			case 'f':
+			//				snapctx.samples
+			//				snapctx.channels
+			//				snapctx.frame_size
+			case 'p':
+				snapctx.intercom_ctx.port = atoi(optarg);
+				break;
+			case 'B':
+				snapctx.readms = atoi(optarg);
+				break;
 			case 'b':
 				snapctx.bufferms = atoi(optarg);
 				break;
 			case 's':
 				snapctx.inputpipe_ctx.fname = strdupa(optarg);
-				inputpipe_init(&snapctx.inputpipe_ctx);
 				break;
 			case 'h':
 			default:
@@ -173,6 +186,8 @@ int main(int argc, char *argv[]) {
 
 	catch_sigterm();
 	taskqueue_init(&snapctx.taskqueue_ctx);
+	if (snapctx.inputpipe_ctx.fname)
+		inputpipe_init(&snapctx.inputpipe_ctx);
 	clientmgr_init(&snapctx.clientmgr_ctx);
 
 	intercom_init(&snapctx.intercom_ctx);

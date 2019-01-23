@@ -75,6 +75,7 @@ typedef struct {
 	VECTOR(intercom_packet_hdr) recent_packets;
 	int fd;
 	uint16_t port;
+	int16_t controlport;
 	uint16_t serverport;
 	uint32_t nodeid;
 	int mtu;
@@ -98,4 +99,4 @@ void intercom_handle_in(intercom_ctx *ctx, int fd);
 bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int port);
 struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx);
 
-pcmChunk intercom_getnextaudiochunk(intercom_ctx *ctx);
+void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *c);

@@ -39,15 +39,19 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// default linux pipe size is 4MB
-// TODO: find a better way to obtain size of input fifo
-#define PIPELENGTH_S 4096 * 1024 / CHUNKSIZE / (1000 / READMS)
+// #define PIPELENGTH_S 4096 * 1024 / CHUNKSIZE / (1000 / READMS)
 
-bool is_chunk_complete(inputpipe_ctx *ctx) { return (CHUNKSIZE == ctx->data_read); }
+int get_pipe_length(size_t chunksize) {
+	// default linux pipe size is 4MB
+	return (4 * 1024 * 1024) / chunksize / (1000 / snapctx.readms);
+}
+
+bool is_chunk_complete(inputpipe_ctx *ctx) { return (ctx->chunk.size == ctx->data_read); }
 
 void set_idle(void *d) {
-	log_verbose("INPUT_UNDERRUN\n");
+	log_verbose("INPUT_UNDERRUN... this will be audible.\n");
 	snapctx.inputpipe_ctx.state = IDLE;
+	snapctx.inputpipe_ctx.idle_task = NULL;
 }
 
 int inputpipe_handle(inputpipe_ctx *ctx) {
@@ -63,35 +67,33 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	if (buffer_full)
 		return -1;
 
-	ssize_t count = read(ctx->fd, &ctx->chunk.data[ctx->data_read], ctx->chunksize - ctx->data_read);
+	ssize_t count = read(ctx->fd, &(ctx->chunk.data)[ctx->data_read], ctx->chunksize - ctx->data_read);
 	ctx->data_read += count;
 
 	if (count == 0) {
 		ctx->state = IDLE;
 	} else if (count && (ctx->state == IDLE)) {
 		ctx->state = PLAYING;
-		ctx->chunk.play_at = ctime;
 		ctx->chunk.play_at = readuntil;
 		ctx->lastchunk = ctx->chunk.play_at;
 		log_verbose("Detected status change, resyncing timestamps. This will be audible.\n", ctx->state);
 		log_debug("read chunk that is to be played at %s, current time %s\n", print_timespec(&ctx->chunk.play_at), print_timespec(&ctime));
-		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, PIPELENGTH_S, 0, set_idle, NULL, &snapctx.efd);
+		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, get_pipe_length(ctx->chunksize), 0, set_idle, NULL, &snapctx.efd);
 	} else if (ctx->state == PLAYING) {
 		// when incrementing timestamp, do not rely on local clock as data data may and will be read at a speed different than playback.
-		ctx->chunk.play_at = timeAddMs(&ctx->chunk.play_at, READMS);
+		ctx->chunk.play_at = timeAddMs(&ctx->chunk.play_at, snapctx.readms);
 
 		timediff t = timeSub(&ctime, &ctx->chunk.play_at);
-		log_debug("read chunk that is to be played at %s, current time %s, diff: %s\n", print_timespec(&ctx->chunk.play_at), print_timespec(&ctime), print_timespec(&t.time));
+		log_debug("read chunk that is to be played at %s, current time %s, diff: %s\n", print_timespec(&ctx->chunk.play_at),
+			  print_timespec(&ctime), print_timespec(&t.time));
 		ctx->lastchunk = ctx->chunk.play_at;
-		reschedule_task(&snapctx.taskqueue_ctx, ctx->idle_task, PIPELENGTH_S, 0);
+		reschedule_task(&snapctx.taskqueue_ctx, ctx->idle_task, get_pipe_length(ctx->chunksize), 0);
 	}
 
 	if (is_chunk_complete(ctx)) {
 		log_debug("read %lu Bytes of data from %s, last read was %lu, reader state: %i, PLAYING: %i, IDLE: %i\n", ctx->data_read, ctx->fname,
 			  count, ctx->state, PLAYING, IDLE);
-		ctx->chunk.samples = snapctx.samples;
-		ctx->chunk.frame_size = snapctx.sample_size;
-		ctx->chunk.channels = snapctx.channels;
+		print_packet(ctx->chunk.data, ctx->chunk.size);
 		ctx->chunk.size = ctx->data_read;
 		ctx->data_read = 0;
 		return 1;
@@ -100,6 +102,11 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 }
 
 void inputpipe_init(inputpipe_ctx *ctx) {
-	ctx->chunksize = CHUNKSIZE;
+	ctx->chunksize = snapctx.samples * snapctx.channels * snapctx.frame_size / (1000 / snapctx.readms);
+	ctx->chunk.data = snap_alloc(ctx->chunksize);
+	ctx->chunk.size = ctx->chunksize;
+	ctx->chunk.samples = snapctx.samples;
+	ctx->chunk.frame_size = snapctx.frame_size;
+	ctx->chunk.channels = snapctx.channels;
 	ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
 }

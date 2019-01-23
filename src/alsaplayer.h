@@ -40,8 +40,6 @@ typedef struct {
 typedef struct {
 	struct snapctx *snapctx;
 
-	char *playnext;
-
 	// frame = samples (sample_size) * #channels
 	unsigned int rate;
 	int channels;

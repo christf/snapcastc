@@ -54,12 +54,9 @@ void intercom_init(intercom_ctx *ctx) {
 		exit(EXIT_FAILURE);
 	}
 
-	obtainrandom(&ctx->nodeid, sizeof(uint32_t), 0);
-
-	log_verbose("bufferms %d READMS: %d\n");
-	ctx->buffer_elements = snapctx.bufferms / snapctx.readms * 20;
-	ctx->buffer = snap_alloc(ctx->mtu * ctx->buffer_elements);
-	memset(ctx->buffer, 0, ctx->mtu * ctx->buffer_elements);
+	ctx->buffer_elements = snapctx.bufferms / snapctx.readms * 2;
+	ctx->buffer = snap_alloc(sizeof(pcmChunk) * ctx->buffer_elements);
+	memset(ctx->buffer, 0, sizeof(pcmChunk) * ctx->buffer_elements);
 }
 
 int assemble_header(intercom_packet_hdr *hdr, uint8_t type) {
@@ -87,9 +84,9 @@ bool intercom_send_packet_unicast(intercom_ctx *ctx, const struct in6_addr *reci
 
 	struct sockaddr_in6 addr = (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = htons(port), .sin6_addr = *recipient};
 
-	log_debug("fd: %i, packet %p, length: %zi\n", ctx->fd, packet, packet_len);
+	log_debug("fd: %i, packet %p, length: %zi %s\n", ctx->fd, packet, packet_len, print_ip(recipient));
 	ssize_t rc = sendto(ctx->fd, packet, packet_len, 0, (struct sockaddr *)&addr, sizeof(addr));
-	log_debug("sent intercom packet rc: %zi to %s\n", rc, print_ip(recipient));
+	// log_debug("sent intercom packet rc: %zi to %s\n", rc, print_ip(recipient));
 
 	if (rc < 0)
 		perror("sendto failed");
@@ -178,50 +175,47 @@ struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx) {
 	struct timespec ret = {};
 	if (ctx->bufferrindex < ctx->bufferwindex + ctx->buffer_wraparound * ctx->buffer_elements) {
 		pcmChunk *buf;
-		buf = (void *)&((char *)ctx->buffer)[ctx->mtu * ctx->bufferrindex];
+		buf = (void *)&((char *)ctx->buffer)[sizeof(pcmChunk) * ctx->bufferrindex];
 		ret.tv_sec = buf->play_at.tv_sec;
 		ret.tv_nsec = buf->play_at.tv_nsec;
 	}
 	return ret;
 }
 
-pcmChunk intercom_peeknextaudiochunk(intercom_ctx *ctx) {
-	pcmChunk ret;
-
+void intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 	if (ctx->bufferrindex < ctx->bufferwindex + ctx->buffer_wraparound * ctx->buffer_elements) {
 		pcmChunk *buf;
-		buf = (void *)&((char *)ctx->buffer)[ctx->mtu * ctx->bufferrindex];
-		memcpy(&ret, buf, sizeof(pcmChunk));
+		buf = (void *)&((char *)ctx->buffer)[sizeof(pcmChunk) * ctx->bufferrindex];
+		memcpy(ret, buf, sizeof(pcmChunk));
 	} else {
 		log_error("BUFFER UNDERRUN\n");
-		get_emptychunk(&ret);
+		get_emptychunk(ret);
 	}
-	return ret;
 }
 
-pcmChunk intercom_getnextaudiochunk(intercom_ctx *ctx) {
-	pcmChunk ret = intercom_peeknextaudiochunk(ctx);
+void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
+	intercom_peeknextaudiochunk(ctx, ret);
 
-	int duration = ret.size * 1000 / (ret.samples * ret.channels * ret.frame_size);
+	int duration = ret->size * 1000 / (ret->samples * ret->channels * ret->frame_size);
 	log_verbose(
-	    "retrieved audio chunk [size: %d, samples: %d, channels: %d, duration: %d] from readindex/writeindex: %d/%d, cached chunks: %d "
+	    "retrieved audio chunk [size: %d, samples: %d, channels: %d, duration: %d data: %hhx] from readindex/writeindex: %d/%d, cached chunks: %d "
 	    "buffer_elements: %d\n",
-	    ret.size, ret.samples, ret.channels, duration, ctx->bufferrindex, ctx->bufferwindex,
+	    ret->size, ret->samples, ret->channels, duration, &ret->data, ctx->bufferrindex, ctx->bufferwindex,
 	    ctx->bufferwindex - ctx->bufferrindex + ctx->buffer_wraparound * ctx->buffer_elements, ctx->buffer_elements);
+	print_packet(ret->data, ret->size);
 
-	if (ret.play_at.tv_sec > 0) {
+	if (ret->play_at.tv_sec > 0) {
 		ctx->bufferrindex = (ctx->bufferrindex + 1) % ctx->buffer_elements;
 		if (ctx->bufferrindex == 0)
 			ctx->buffer_wraparound = 0;
 	}
-
-	return ret;
 }
 
 void intercom_put_chunk(intercom_ctx *ctx, pcmChunk *chunk) {
-	log_debug("wrote chunk to buffer %d %d %d to offset: %d size: %d\n", ctx->bufferwindex, ctx->buffer_elements, chunk->size, ctx->bufferwindex,
-		  sizeof(pcmChunk));
-	memcpy(&((char *)ctx->buffer)[ctx->mtu * ctx->bufferwindex], chunk, sizeof(pcmChunk));
+	log_debug("wrote chunk to buffer %d %d %d to offset: %d\n", ctx->bufferwindex, ctx->buffer_elements, chunk->size, ctx->bufferwindex);
+	print_packet(chunk->data, chunk->size);
+
+	memcpy(&((char *)ctx->buffer)[sizeof(pcmChunk) * ctx->bufferwindex], chunk, sizeof(pcmChunk));
 	ctx->bufferwindex = (ctx->bufferwindex + 1) % ctx->buffer_elements;
 	if (ctx->bufferwindex == 0)
 		ctx->buffer_wraparound = 1;
@@ -229,12 +223,18 @@ void intercom_put_chunk(intercom_ctx *ctx, pcmChunk *chunk) {
 
 bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int packet_len) {
 	// TODO: place packet in cache
-	// * starte decoder für Paket
+	//  start decoder for Paket
+	// TODO: change packet format, implement TLV for audio data.
 	pcmChunk chunk;
+	pcmChunk *pchunk = (void*)&packet[1];
 
-	memcpy(&chunk, &packet[1], packet_len - sizeof(intercom_packet_audio));
-
+	chunk_copy_meta(&chunk, pchunk);
 	chunk_ntoh(&chunk);
+	chunk.data = snap_alloc(chunk.size);
+
+	memcpy(chunk.data, &pchunk->data, chunk.size); 
+//	print_packet(chunk.data, 960);
+
 	log_debug("read chunk from packet: %d samples: %d sample size:%d  channels: %d packet_len: %d, hdrsize: %d\n\n", chunk.size, chunk.samples,
 		  chunk.frame_size, chunk.channels, packet_len, sizeof(intercom_packet_audio));
 
@@ -277,7 +277,6 @@ void intercom_handle_in(intercom_ctx *ctx, int fd) {
 	log_debug("HANDLING INTERCOM PACKET on fd %i using buffersize of %i ", fd, ctx->mtu);
 
 	while (1) {
-		// count = read(fd, buf, ctx->mtu);
 		struct sockaddr_in6 peer_addr;
 
 		unsigned int peer_addr_len = sizeof(struct sockaddr_storage);
@@ -304,7 +303,7 @@ void intercom_handle_in(intercom_ctx *ctx, int fd) {
 
 		uint16_t port = ntohs(peer_addr.sin6_port);
 		log_debug("- read from %s(%d), %zi Bytes of data: ", print_ip(&peer), port, count);
-		// print_packet(buf, count);
+		print_packet(buf, count);
 
 		intercom_handle_packet(ctx, buf, count, &peer, port);
 	}
@@ -313,17 +312,21 @@ void intercom_handle_in(intercom_ctx *ctx, int fd) {
 /** send chunk to all clients that are currently active
 */
 void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
-	uint8_t packet[sizeof(intercom_packet_audio) + sizeof(pcmChunk)];
+	int chunksize = sizeof(pcmChunk) - sizeof(char *) + chunk->size;
+	uint8_t packet[sizeof(intercom_packet_audio) + chunksize];
 
 	pcmChunk sendchunk;
-	memcpy(&sendchunk, chunk, sizeof(pcmChunk));
+	memcpy(&sendchunk, chunk, sizeof(pcmChunk)); // this does not alter the data pointer
 	chunk_hton(&sendchunk);
 
 	ssize_t packet_len;
 	packet_len = assemble_header(&((intercom_packet_audio *)packet)->hdr, AUDIO_DATA);
 
 	memcpy(&packet[packet_len], &sendchunk, sizeof(pcmChunk));
-	packet_len += sizeof(pcmChunk);
+	packet_len += sizeof(pcmChunk) - sizeof(char*);
+
+	memcpy(&packet[packet_len], chunk->data, chunk->size);
+	packet_len += chunk->size;
 
 	// print_packet(packet, packet_len);
 	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {

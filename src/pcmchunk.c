@@ -1,6 +1,7 @@
 #include "pcmchunk.h"
 #include "snapcast.h"
 #include "util.h"
+#include "alloc.h"
 
 #include <arpa/inet.h>
 #include <time.h>
@@ -10,10 +11,11 @@ void get_emptychunk(pcmChunk *ret) {
 	ret->samples = snapctx.alsaplayer_ctx.rate;
 	ret->channels = snapctx.alsaplayer_ctx.channels;
 	ret->frame_size = snapctx.alsaplayer_ctx.frame_size;
-	ret->size = CHUNKSIZE;
+	ret->size = snapctx.alsaplayer_ctx.rate * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size / (1000 / snapctx.readms);;
 	ret->play_at = t;
+	ret->data = snap_alloc(ret->size);
 	memset(ret->data, 0, ret->size);
-	log_error("returning silence\n");  // should we display a timestamp?
+	log_verbose("created empty chunk\n");
 }
 
 bool chunk_is_empty(pcmChunk *c) { return !(c->play_at.tv_sec > 0); }
@@ -31,3 +33,13 @@ void chunk_hton(pcmChunk *chunk) {
 	chunk->samples = htonl(chunk->samples);
 	chunk->size = htons(chunk->size);
 }
+
+void chunk_copy_meta(pcmChunk *dest, pcmChunk *src) {
+	dest->play_at.tv_sec = src->play_at.tv_sec;
+	dest->play_at.tv_nsec = src->play_at.tv_nsec;
+	dest->samples = src->samples;
+	dest->frame_size = src->frame_size;
+	dest->channels = src->channels;
+	dest->size = src->size;
+}
+

@@ -67,27 +67,31 @@ void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 }
 */
 
-void adjust_speed(pcmChunk *chunk, char *out, double factor) {
+void adjust_speed(pcmChunk *chunk, double factor) {
 	double orate = chunk->samples * factor;
 	size_t olen = (size_t)(chunk->size * orate / chunk->samples + .5);
 	size_t odone;
+
+	uint8_t *out = snap_alloc(factor * chunk->size);
 	
 	soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_MQ, 0);
 	soxr_io_spec_t io_spec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);  // TODO this should not be hard-coded.
 
-	soxr_error_t error = soxr_oneshot(chunk->samples, orate, chunk->channels,				//Rates and # of chans.
-					  chunk->data, chunk->size / chunk->channels / chunk->frame_size, NULL, // Input.
-					  out, olen, &odone,							// Output.
-					  &io_spec, &quality_spec, NULL);					// Default configuration.
+	soxr_error_t error = soxr_oneshot(chunk->samples, orate, chunk->channels,
+					  chunk->data, chunk->size / chunk->channels / chunk->frame_size, NULL,
+					  out, olen, &odone,
+					  &io_spec, &quality_spec, NULL);
 
 	log_verbose("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
+	free(chunk->data);
+	chunk->data = out;
 	chunk->size = olen;
 }
 
-int getchunk(char *buf, int buffsize, size_t delay_frames) {
+// TODO: getchunk should return a pcmChunk
+int getchunk(pcmChunk *p, size_t delay_frames) {
 	const double adjustment = 0.01;
 	double factor = 1;
-	pcmChunk p;
 	struct timespec ctime;
 	obtainsystime(&ctime);
 	struct timespec ts = ctime;
@@ -104,8 +108,9 @@ int getchunk(char *buf, int buffsize, size_t delay_frames) {
 
 	bool is_near = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < near_ms * 1000000L);
 	if (snapctx.alsaplayer_ctx.playing || ((!snapctx.alsaplayer_ctx.playing) && tdiff.sign > 0) || is_near) {
-		p = intercom_getnextaudiochunk(&snapctx.intercom_ctx);
-		if (chunk_is_empty(&p)) {
+		intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
+		// print_packet(p->data, p->size);
+		if (chunk_is_empty(p)) {
 			snapctx.alsaplayer_ctx.empty_chunks_in_row++;
 			if (snapctx.alsaplayer_ctx.empty_chunks_in_row > 5)
 				snapctx.alsaplayer_ctx.playing = false;
@@ -115,7 +120,7 @@ int getchunk(char *buf, int buffsize, size_t delay_frames) {
 			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000 , (int)(1.2 * snapctx.bufferms) % 1000);
 		}
 	} else
-		get_emptychunk(&p);
+		get_emptychunk(p);
 
 	if (!is_near) {
 		factor = 1 - adjustment * tdiff.sign;
@@ -129,40 +134,41 @@ int getchunk(char *buf, int buffsize, size_t delay_frames) {
 
 	// TODO: return a new chunk with new parameters instead of just a buffer.
 	// TODO: for this make pcmChunk allow chunks with dynamic size.
-	adjust_speed(&p, buf, factor);
+	adjust_speed(p, factor);
 
 	// TODO adjust volume
 
-	log_verbose("status: %d chunk: buffsize: %d chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n",
-		    snapctx.alsaplayer_ctx.playing, buffsize, p.size, print_timespec(&ctime), print_timespec(&p.play_at), print_timespec(&tdiff.time),
+	log_verbose("status: %d chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n",
+		    snapctx.alsaplayer_ctx.playing, p->size, print_timespec(&ctime), print_timespec(&p->play_at), print_timespec(&tdiff.time),
 		    tdiff.sign);
 
-	return p.size;
+	return p->size;
 }
 
 void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	unsigned int pcm;
 	snd_pcm_sframes_t delayp;
-	unsigned int buff_size = ctx->frames * ctx->frame_size * ctx->channels;
-	unsigned int chunksize;
+	pcmChunk chunk;
 
 	if (snd_pcm_delay(ctx->pcm_handle, &delayp) < 0)
 		log_error("could not obtain cm delay\n");
 
-	if ((chunksize = getchunk(ctx->playnext, buff_size, delayp)) == 0) {
+	if ((getchunk(&chunk, delayp)) == 0) {
 		log_error("end of data\n");  // TODO: schedule job to close alsa socket in alsatimeout ms. - still keep the sleep to reduce cpu
 	}
 
-	if ((pcm = snd_pcm_writei(ctx->pcm_handle, ctx->playnext, chunksize / ctx->channels / ctx->frame_size)) == -EPIPE) {
+	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, chunk.size / ctx->channels / ctx->frame_size)) == -EPIPE) {
 		log_error("XRUN.\n");
 		snd_pcm_prepare(ctx->pcm_handle);
 	} else if (pcm < 0) {
 		log_error("ERROR. Can't write to PCM device. %s, snd_pcm_recover(%d)\n", snd_strerror(pcm),
 			  (int)snd_pcm_recover(ctx->pcm_handle, pcm, 0));
-	} else if (pcm < chunksize / ctx->channels / ctx->frame_size) {
+	} else if (pcm < chunk.size / ctx->channels / ctx->frame_size) {
 		log_error("ERROR. write to pcm was not successful for all the data - THIS LIKELY IS A BUG");  // TODO: should we write the rest of the
 													      // data later?
 	}
+
+	free(chunk.data);
 
 	log_verbose("PCM delay frames: %d\n", delayp);
 }
@@ -310,7 +316,6 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 
 	buff_size = ctx->frames * ctx->channels * ctx->frame_size /* 2 -> sample size */;
 	log_verbose("alsa requested buff_size: %d\n", buff_size);
-	ctx->playnext = snap_alloc(buff_size);
 
 	snd_pcm_hw_params_get_period_time(ctx->params, &tmp, NULL);
 	log_verbose("period time: %d\n", tmp);

@@ -31,6 +31,7 @@
 #include "util.h"
 #include "vector.h"
 #include "version.h"
+#include "syscallwrappers.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -135,24 +136,26 @@ int main(int argc, char *argv[]) {
 	snapctx.verbose = false;
 	snapctx.debug = false;
 
-	// TODO: read these from stream URI
 	snapctx.alsaplayer_ctx.initialized = false;
-	snapctx.alsaplayer_ctx.rate = FREQUENCY;
-	snapctx.alsaplayer_ctx.channels = CHANNELS;
-	snapctx.alsaplayer_ctx.frame_size = SAMPLESIZE;
-	snapctx.readms = READMS;
-
-	snapctx.intercom_ctx.port = INTERCOM_PORT;
-	snapctx.intercom_ctx.mtu = 1500;
-	snapctx.intercom_ctx.serverport = INTERCOM_PORT;
 
 	// TODO: set value from stream info
 	snapctx.bufferms = 1000;
+	snapctx.alsaplayer_ctx.rate = 48000;
+	snapctx.alsaplayer_ctx.channels = 2;
+	snapctx.alsaplayer_ctx.frame_size = 2;
+	snapctx.readms = 5;
+
+
+	// set some defaults
+	snapctx.intercom_ctx.port = INTERCOM_PORT;
+	snapctx.intercom_ctx.mtu = 1500; // Do we need to expose this to the user via cli?
+	snapctx.intercom_ctx.serverport = INTERCOM_PORT;
+	obtainrandom(&snapctx.intercom_ctx.nodeid, sizeof(uint32_t), 0);
 
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
 	int c;
-	while ((c = getopt_long(argc, argv, "lVvdhH:p:s:", long_options, &option_index)) != -1) {
+	while ((c = getopt_long(argc, argv, "lVvdhH:p:s:i:", long_options, &option_index)) != -1) {
 		switch (c) {
 			case 'V':
 				printf("snapclient %s\n", SOURCE_VERSION);
@@ -166,8 +169,14 @@ int main(int argc, char *argv[]) {
 			case 'l':
 				alsaplayer_pcm_list();
 				exit(EXIT_SUCCESS);
+			case 'P':
+				snapctx.intercom_ctx.serverport = atoi(optarg);
+				break;
 			case 'p':
 				snapctx.intercom_ctx.port = atoi(optarg);
+				break;
+			case 'i':
+				snapctx.intercom_ctx.nodeid = atol(optarg);
 				break;
 			case 'H':  // TODO: deduplicate with intercom_init() and move away from switch statement
 				snapctx.servername = strdupa(optarg);

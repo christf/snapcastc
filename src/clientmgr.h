@@ -4,16 +4,15 @@
 #include <sys/time.h>
 #include "taskqueue.h"
 #include "vector.h"
+#include <netdb.h>
 
 typedef VECTOR(struct client) client_vector;
 
-typedef struct client {
-	struct timespec lastseen;
-	struct in6_addr ip;
-	int fd;
-	uint16_t port;
-	char *name;
-	uint32_t id;
+typedef struct client { 
+	struct in6_addr ip; 
+	uint16_t port; 
+	char name[NI_MAXHOST];
+	uint32_t id; 
 
 	taskqueue_t *purge_task;
 } client_t;
@@ -28,11 +27,10 @@ struct client_purge_task {
 typedef struct {
 	struct snapctx *ctx;
 	client_vector clients;
-	int client_timeout;  // purge client when not receiving a "hello" for CLIENT_TIMEOUT seconds
 	struct snapctx *snapctx;
 } clientmgr_ctx;
 
-client_t new_client(const uint32_t id, const struct in6_addr *host, const uint16_t port);
+client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *host, const uint16_t port);
 struct client *get_client(const uint32_t clientid);
 
 void free_client(client_t *client);

@@ -43,7 +43,7 @@ struct snapctx {
 	int bufferms;
 
 	int samples;
-	int sample_size;
+	int frame_size;
 	int channels;
 
 	size_t readms;

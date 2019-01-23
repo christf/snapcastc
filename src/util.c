@@ -79,7 +79,7 @@ void print_packet(unsigned char *buf, int size) {
 	for (int i = 0; i < size; i++) {
 		if (i % 4 == 0)
 			log_debug(" ");
-		log_debug("%hhx ", buf[i]);
+		log_debug("%02hhX", buf[i]);
 	}
 	log_debug("]\n");
 }
