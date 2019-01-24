@@ -27,6 +27,10 @@ Linux. Patches for other platforms are welcome.
 While it is important for clients to run on small devices, audio quality is 
 valued above CPU utilization. The smallest target platform is Raspberry PI B.
 
+### Time Synchronisation
+
+Snapcastc assumes that system clocks are synchronized. Use ntp to achieve that.
+
 ## Usage
 See roadmap for implementation status.
 
@@ -41,21 +45,19 @@ Allowed options:
   -P <port>                           Remote TCP control port (default: 1705)
   -s <file>                           filename of the PCM input stream.
   -f arg (=48000:16:2)                Sample format *
-  -c, --codec arg (=flac)             Default transport codec *
-                                      (flac|ogg|pcm)[:options]
-                                      Type codec:? to get codec specific options
-  -B <read_ms>                        Default stream read buffer [ms] *
+  -c, --codec arg (=opus)             Default transport codec *
+                                      (flac*|opus*|pcm*)[:options]
+  -B <read_ms>                        Default stream read buffer [ms]
   -b, --buffer arg (=1000)            Buffer [ms]
 ```
 Options marked with (*) are not implemented yet.
 
 I am starting snapserver like this:
 ```
-snapcast-server -b 1000 -s /tmp/snapfifo -s 48000:16:2 -c opus
+snapcast-server -b 25000 -s /tmp/snapfifo -s 48000:16:2 -B 5 -p 1704 -c opus
 ```
 
-
-### client
+### Client
 ```
 Allowed options:
   -h --help                       produce help message
@@ -72,6 +74,12 @@ Allowed options:
 ```
 
 Options marked with (*) are not implemented yet.
+
+I am starting the client like this:
+```
+snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default -i 12
+```
+
 
 ## Status and Roadmap
 
@@ -93,9 +101,11 @@ Options marked with (*) are not implemented yet.
 
 ### Dependencies
 
-    apt install libsoxr-dev libasound2-dev libopus-dev build-essential git libjson-c3-dev
+    apt install libsoxr libasound2 libopus libjson-c3
     
 ### Build
+
+    apt install libsoxr-dev libasound2-dev libopus-dev build-essential git libjson-c3-dev
 
 in the root of this project, run:
 ```
@@ -112,11 +122,9 @@ to build and install the program.
 * clients say hello to servers
 * servers maintain a list of clients that have recently checked in
 * when playing data, it is sent to each client using unicast UDP
-* every hello is replied with the current time
 * every data packet has a sequence number
 * when a client receives a sequence number n+1 but has not received m it will 
-  REQUEST missing packets from the server (we could also check every 100ms for 
-  missing packets)
+  REQUEST missing packets from the server
 
 
 # Collaboation
