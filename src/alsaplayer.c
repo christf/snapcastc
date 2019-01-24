@@ -285,6 +285,9 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	if ((pcm = snd_pcm_hw_params_set_format(ctx->pcm_handle, ctx->params, snd_pcm_format)) < 0)
 		log_error("ERROR: Can't set format. %s\n", snd_strerror(pcm));
 
+	if ((pcm = snd_pcm_hw_params_set_format(ctx->pcm_handle, ctx->params, snd_pcm_format)) < 0)
+		log_error("ERROR: Can't set format. %s\n", snd_strerror(pcm));
+
 	if ((pcm = snd_pcm_hw_params_set_channels(ctx->pcm_handle, ctx->params, ctx->channels)) < 0)
 		log_error("ERROR: Can't set channels number. %s\n", snd_strerror(pcm));
 
@@ -330,13 +333,12 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 		exit_error("Unable to obtain poll descriptors for playback: %s\n", snd_strerror(err));
 	}
 
-	snd_pcm_sw_params_t *swparams;
-	snd_pcm_sw_params_alloca(&swparams);
-	snd_pcm_sw_params_current(ctx->pcm_handle, swparams);
+	snd_pcm_sw_params_alloca(&ctx->swparams);
+	snd_pcm_sw_params_current(ctx->pcm_handle, ctx->swparams);
 
-	snd_pcm_sw_params_set_avail_min(ctx->pcm_handle, swparams, ctx->frames);
-	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, swparams, ctx->frames);
-	snd_pcm_sw_params(ctx->pcm_handle, swparams);
+	snd_pcm_sw_params_set_avail_min(ctx->pcm_handle, ctx->swparams, ctx->frames);
+	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, ctx->swparams, ctx->frames);
+	snd_pcm_sw_params(ctx->pcm_handle, ctx->swparams);
 
 	ctx->initialized = true;
 }

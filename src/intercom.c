@@ -229,8 +229,8 @@ void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 void intercom_put_chunk(intercom_ctx *ctx, pcmChunk *chunk) {
 	log_debug("wrote chunk to buffer readindex: %d elements: %d to writeindex: %d\n", ctx->bufferrindex, ctx->buffer_elements, ctx->bufferwindex);
 	print_packet(chunk->data, chunk->size);
-	
-	// todo: should we protect from over-writing unread data?
+
+	// todo: protect from over-writing unread data - otherwise we are leaking memory.:w
 	memcpy(&((uint8_t *)ctx->buffer)[sizeof(pcmChunk) * ctx->bufferwindex], chunk, sizeof(pcmChunk));
 	ctx->bufferwindex = (ctx->bufferwindex + 1) % ctx->buffer_elements;
 	if (ctx->bufferwindex == 0)

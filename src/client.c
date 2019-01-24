@@ -109,6 +109,7 @@ void loop() {
 				} else if ((fds[i].revents & POLLOUT) && (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx))) {
 					log_debug("alsa device ready for IO\n");
 					alsaplayer_handle(&snapctx.alsaplayer_ctx);
+					snapctx.alsaplayer_ctx.ufds[i].revents = 0;  // clear events for next iteration
 				}
 
 				fds[i].revents = 0;  // clear events for next iteration
