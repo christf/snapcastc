@@ -137,11 +137,13 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	adjust_speed(p, factor);
 
 	// TODO adjust volume
-
+	// TODO: PRINT THE BELOW LINE IN VERBOSE MODE
+/*
+ *
 	log_verbose("status: %d chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n",
 		    snapctx.alsaplayer_ctx.playing, p->size, print_timespec(&ctime), print_timespec(&p->play_at), print_timespec(&tdiff.time),
 		    tdiff.sign);
-
+*/
 	return p->size;
 }
 
@@ -157,7 +159,8 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		log_error("end of data\n");  // TODO: schedule job to close alsa socket in alsatimeout ms. - still keep the sleep to reduce cpu
 	}
 
-	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, chunk.size / ctx->channels / ctx->frame_size)) == -EPIPE) {
+	log_error("Frames: %d\n", ctx->frames);
+	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, ctx->frames)) == -EPIPE) {
 		log_error("XRUN.\n");
 		snd_pcm_prepare(ctx->pcm_handle);
 	} else if (pcm < 0) {
@@ -235,6 +238,7 @@ void init_alsafd(alsaplayer_ctx *ctx) {
 		struct pollfd *pfd = &snapctx.alsaplayer_ctx.ufds[i];
 		ctx->main_poll_fd[i].fd = pfd->fd;
 		ctx->main_poll_fd[i].events = POLLIN;
+		ctx->main_poll_fd[i].revents = 0;
 	}
 }
 
@@ -264,7 +268,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	if ((pcm = snd_pcm_open(&ctx->pcm_handle, ctx->pcm.name, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0)
 		log_error("ERROR: Cannot open \"%s\" PCM device. %s\n", PCM_DEVICE, snd_strerror(pcm));
 
-	snd_pcm_hw_params_alloca(&ctx->params);
+	snd_pcm_hw_params_malloc(&ctx->params);
 	snd_pcm_hw_params_any(ctx->pcm_handle, ctx->params);
 
 	if ((pcm = snd_pcm_hw_params_set_access(ctx->pcm_handle, ctx->params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0)
@@ -334,12 +338,15 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	}
 
 	snd_pcm_sw_params_alloca(&ctx->swparams);
+
 	snd_pcm_sw_params_current(ctx->pcm_handle, ctx->swparams);
 
 	snd_pcm_sw_params_set_avail_min(ctx->pcm_handle, ctx->swparams, ctx->frames);
 	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, ctx->swparams, ctx->frames);
+ 	// enable period events when requested
+//	snd_pcm_sw_params_set_period_event(ctx->pcm_handle, ctx->swparams, 1);
+	
 	snd_pcm_sw_params(ctx->pcm_handle, ctx->swparams);
-
 	ctx->initialized = true;
 }
 

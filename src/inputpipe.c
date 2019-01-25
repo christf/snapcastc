@@ -74,19 +74,25 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		ctx->state = IDLE;
 	} else if (count && (ctx->state == IDLE)) {
 		ctx->state = PLAYING;
-		ctx->chunk.play_at = readuntil;
-		ctx->lastchunk = ctx->chunk.play_at;
+		ctx->chunk.play_at_tv_sec = readuntil.tv_sec;
+		ctx->chunk.play_at_tv_nsec = readuntil.tv_nsec;
+		ctx->lastchunk.tv_sec = ctx->chunk.play_at_tv_sec;
+		ctx->lastchunk.tv_nsec = ctx->chunk.play_at_tv_nsec;
 		log_verbose("Detected status change, resyncing timestamps. This will be audible.\n", ctx->state);
-		log_debug("read chunk that is to be played at %s, current time %s\n", print_timespec(&ctx->chunk.play_at), print_timespec(&ctime));
+
+		log_debug("read chunk that is to be played at %s, current time %s\n", print_timespec(&(struct timespec){ .tv_sec = ctx->chunk.play_at_tv_sec, .tv_nsec = ctx->chunk.play_at_tv_nsec}), print_timespec(&ctime));
 		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, get_pipe_length(ctx->chunksize), 0, set_idle, NULL, &snapctx.efd);
 	} else if (ctx->state == PLAYING) {
 		// when incrementing timestamp, do not rely on local clock as data data may and will be read at a speed different than playback.
-		ctx->chunk.play_at = timeAddMs(&ctx->chunk.play_at, snapctx.readms);
+		ctx->chunk.play_at_tv_sec += snapctx.readms / 1000;
+		ctx->chunk.play_at_tv_nsec += snapctx.readms % 1000;
 
-		timediff t = timeSub(&ctime, &ctx->chunk.play_at);
-		log_debug("read chunk that is to be played at %s, current time %s, diff: %s\n", print_timespec(&ctx->chunk.play_at),
-			  print_timespec(&ctime), print_timespec(&t.time));
-		ctx->lastchunk = ctx->chunk.play_at;
+//		timediff t = timeSub(&ctime, &ctx->chunk.play_at);
+//		log_debug("read chunk that is to be played at %s, current time %s, diff: %s\n", print_timespec(&ctx->chunk.play_at),
+//			  print_timespec(&ctime), print_timespec(&t.time));
+		ctx->lastchunk.tv_sec = ctx->chunk.play_at_tv_sec;
+		ctx->lastchunk.tv_nsec = ctx->chunk.play_at_tv_nsec;
+		// ctx->lastchunk = ctx->chunk.play_at;
 		reschedule_task(&snapctx.taskqueue_ctx, ctx->idle_task, get_pipe_length(ctx->chunksize), 0);
 	}
 

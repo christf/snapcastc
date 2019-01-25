@@ -189,8 +189,8 @@ struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx) {
 	if (ctx->bufferrindex < ctx->bufferwindex + ctx->buffer_wraparound * ctx->buffer_elements) {
 		pcmChunk *buf;
 		buf = (void *)&((char *)ctx->buffer)[sizeof(pcmChunk) * ctx->bufferrindex];
-		ret.tv_sec = buf->play_at.tv_sec;
-		ret.tv_nsec = buf->play_at.tv_nsec;
+		ret.tv_sec = buf->play_at_tv_sec;
+		ret.tv_nsec = buf->play_at_tv_nsec;
 	}
 	return ret;
 }
@@ -219,7 +219,7 @@ void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 	    ctx->bufferwindex - ctx->bufferrindex + ctx->buffer_wraparound * ctx->buffer_elements, ctx->buffer_elements);
 	print_packet(ret->data, ret->size);
 
-	if (ret->play_at.tv_sec > 0) {
+	if (ret->play_at_tv_sec > 0) {
 		ctx->bufferrindex = (ctx->bufferrindex + 1) % ctx->buffer_elements;
 		if (ctx->bufferrindex == 0)
 			ctx->buffer_wraparound = 0;

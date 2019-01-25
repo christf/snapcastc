@@ -5,7 +5,8 @@
 #include <sys/time.h>
 
 typedef struct  __attribute__((__packed__)) {
-	struct timespec play_at;
+	uint32_t play_at_tv_sec;
+	uint32_t play_at_tv_nsec;
 	uint32_t samples;
 	uint8_t frame_size;
 	uint8_t channels;

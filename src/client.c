@@ -91,7 +91,7 @@ void loop() {
 				if (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx)) {
 					// this is a nightmare. alsa logic is meant to be contained in alsaplayer
 					unsigned short revents;
-					snd_pcm_poll_descriptors_revents(snapctx.alsaplayer_ctx.pcm_handle, snapctx.alsaplayer_ctx.ufds, fd_index, &revents);
+					snd_pcm_poll_descriptors_revents(snapctx.alsaplayer_ctx.pcm_handle, fds, snapctx.alsaplayer_ctx.pollfd_count, &revents);
 					fds[i].revents = revents;
 				}
 
