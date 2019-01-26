@@ -213,9 +213,9 @@ void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 		duration = ret->size * 1000 / (ret->samples * ret->channels * ret->frame_size);
 
 	log_verbose(
-	    "retrieved audio chunk [size: %d, samples: %d, channels: %d, duration: %d data: %hhx] from readindex/writeindex: %d/%d, cached chunks: %d "
-	    "buffer_elements: %d\n",
-	    ret->size, ret->samples, ret->channels, duration, &ret->data, ctx->bufferrindex, ctx->bufferwindex,
+	    "retrieved audio chunk [size: %d, samples: %d, channels: %d, timestamp %lld.%lld duration: %d data: %hhx] from readindex/writeindex: %d/%d, cached chunks: %d "
+	    "buffer_elements: %d,\n",
+	    ret->size, ret->samples, ret->channels, ret->play_at_tv_sec, ret->play_at_tv_nsec, duration, &ret->data, ctx->bufferrindex, ctx->bufferwindex,
 	    ctx->bufferwindex - ctx->bufferrindex + ctx->buffer_wraparound * ctx->buffer_elements, ctx->buffer_elements);
 	print_packet(ret->data, ret->size);
 

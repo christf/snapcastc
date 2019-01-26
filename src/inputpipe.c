@@ -84,12 +84,17 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, get_pipe_length(ctx->chunksize), 0, set_idle, NULL, &snapctx.efd);
 	} else if (ctx->state == PLAYING) {
 		// when incrementing timestamp, do not rely on local clock as data data may and will be read at a speed different than playback.
-		ctx->chunk.play_at_tv_sec += snapctx.readms / 1000;
-		ctx->chunk.play_at_tv_nsec += snapctx.readms % 1000;
+		struct timespec play_at;
+		play_at.tv_sec = ctx->chunk.play_at_tv_sec;
+		play_at.tv_nsec = ctx->chunk.play_at_tv_nsec;
 
-//		timediff t = timeSub(&ctime, &ctx->chunk.play_at);
-//		log_debug("read chunk that is to be played at %s, current time %s, diff: %s\n", print_timespec(&ctx->chunk.play_at),
-//			  print_timespec(&ctime), print_timespec(&t.time));
+		play_at = timeAddMs(&play_at, snapctx.readms);
+		ctx->chunk.play_at_tv_sec = play_at.tv_sec;
+		ctx->chunk.play_at_tv_nsec = play_at.tv_nsec;
+
+		timediff t = timeSub(&ctime, &play_at);
+		log_debug("read chunk that is to be played at %s, current time %s, diff: %s\n", print_timespec(&play_at),
+			  print_timespec(&ctime), print_timespec(&t.time));
 		ctx->lastchunk.tv_sec = ctx->chunk.play_at_tv_sec;
 		ctx->lastchunk.tv_nsec = ctx->chunk.play_at_tv_nsec;
 		// ctx->lastchunk = ctx->chunk.play_at;

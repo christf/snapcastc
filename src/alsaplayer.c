@@ -159,7 +159,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		log_error("end of data\n");  // TODO: schedule job to close alsa socket in alsatimeout ms. - still keep the sleep to reduce cpu
 	}
 
-	log_error("Frames: %d\n", ctx->frames);
+	log_error("Handling alsa frames: %d\n", ctx->frames);
 	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, ctx->frames)) == -EPIPE) {
 		log_error("XRUN.\n");
 		snd_pcm_prepare(ctx->pcm_handle);
@@ -168,7 +168,6 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 			  (int)snd_pcm_recover(ctx->pcm_handle, pcm, 0));
 	} else if (pcm < chunk.size / ctx->channels / ctx->frame_size) {
 		log_error("ERROR. write to pcm was not successful for all the data - THIS LIKELY IS A BUG");  // TODO: should we write the rest of the
-													      // data later?
 	}
 
 	free(chunk.data);
