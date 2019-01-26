@@ -75,7 +75,7 @@ void del_fd(int efd, int fd) {
 }
 
 void print_packet(unsigned char *buf, int size) {
-	//if (! snapctx.debug )
+	if (! snapctx.debug )
 		return;
 
 	log_debug("Packet: [");

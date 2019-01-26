@@ -95,9 +95,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		timediff t = timeSub(&ctime, &play_at);
 		log_debug("read chunk that is to be played at %s, current time %s, diff: %s\n", print_timespec(&play_at),
 			  print_timespec(&ctime), print_timespec(&t.time));
-		ctx->lastchunk.tv_sec = ctx->chunk.play_at_tv_sec;
-		ctx->lastchunk.tv_nsec = ctx->chunk.play_at_tv_nsec;
-		// ctx->lastchunk = ctx->chunk.play_at;
+		ctx->lastchunk = play_at;
 		reschedule_task(&snapctx.taskqueue_ctx, ctx->idle_task, get_pipe_length(ctx->chunksize), 0);
 	}
 

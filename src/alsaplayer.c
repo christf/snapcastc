@@ -125,16 +125,17 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		factor = 1 - adjustment * tdiff.sign;
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (! not_even_close) {
-			log_verbose("HAHA not even close, playing silence!\n");
-			get_emptychunk(p);
+			log_verbose("Timing is not even close, replacing chunk data with silence!\n");
+			memset(p->data, 0, p->size);
+			p->play_at_tv_sec = 0;
+
 			snapctx.alsaplayer_ctx.playing = false;
 			snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
 		}
 	}
 
-	// TODO: return a new chunk with new parameters instead of just a buffer.
-	// TODO: for this make pcmChunk allow chunks with dynamic size.
-	adjust_speed(p, factor);
+	if (! chunk_is_empty(p)) // save CPU when chunk contains only silence
+		adjust_speed(p, factor);
 
 	// TODO adjust volume
 	// TODO: PRINT THE BELOW LINE IN VERBOSE MODE
@@ -159,8 +160,9 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		log_error("end of data\n");  // TODO: schedule job to close alsa socket in alsatimeout ms. - still keep the sleep to reduce cpu
 	}
 
-	log_error("Handling alsa frames: %d\n", ctx->frames);
-	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, ctx->frames)) == -EPIPE) {
+ 	log_debug("Handling alsa frames: %d\n", ctx->frames);
+	print_packet(chunk.data, chunk.size);
+	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data,  chunk.size / chunk.channels / chunk.frame_size)) == -EPIPE) {
 		log_error("XRUN.\n");
 		snd_pcm_prepare(ctx->pcm_handle);
 	} else if (pcm < 0) {
