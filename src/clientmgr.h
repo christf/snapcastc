@@ -1,18 +1,18 @@
 #pragma once
 
+#include <netdb.h>
 #include <netinet/in.h>
 #include <sys/time.h>
 #include "taskqueue.h"
 #include "vector.h"
-#include <netdb.h>
 
 typedef VECTOR(struct client) client_vector;
 
-typedef struct client { 
-	struct in6_addr ip; 
-	uint16_t port; 
+typedef struct client {
+	struct in6_addr ip;
+	uint16_t port;
 	char name[NI_MAXHOST];
-	uint32_t id; 
+	uint32_t id;
 
 	taskqueue_t *purge_task;
 } client_t;

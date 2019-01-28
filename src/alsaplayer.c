@@ -16,8 +16,6 @@
 
 // look at af_scaletempo.c from mplayer
 
-
-
 // soxr could be interesting. I am under the impression it changes pitch though
 /*
 void adjust_speed(pcmChunk *chunk, char *out, double factor) {
@@ -53,7 +51,7 @@ void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 			1);
 	uint16_t inframes = chunk->size / chunk->channels / chunk->frame_size;
 	uint16_t outframes = chunk->size / chunk->channels / chunk->frame_size * factor;
-	
+
 	rubberband_set_max_process_size(rbs, inframes);
 	unsigned int required =  rubberband_get_samples_required(rbs);
 	log_error("required samples: %d, have: %d\n", required, inframes);
@@ -73,16 +71,14 @@ void adjust_speed(pcmChunk *chunk, double factor) {
 	size_t odone;
 
 	uint8_t *out = snap_alloc(factor * chunk->size);
-	
+
 	soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_MQ, 0);
 	soxr_io_spec_t io_spec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);  // TODO this should not be hard-coded.
 
-	soxr_error_t error = soxr_oneshot(chunk->samples, orate, chunk->channels,
-					  chunk->data, chunk->size / chunk->channels / chunk->frame_size, NULL,
-					  out, olen, &odone,
-					  &io_spec, &quality_spec, NULL);
+	soxr_error_t error = soxr_oneshot(chunk->samples, orate, chunk->channels, chunk->data, chunk->size / chunk->channels / chunk->frame_size,
+					  NULL, out, olen, &odone, &io_spec, &quality_spec, NULL);
 
-	log_verbose("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
+	log_debug("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
 	free(chunk->data);
 	chunk->data = out;
 	chunk->size = olen;
@@ -108,7 +104,6 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	bool is_near = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < near_ms * 1000000L);
 	if (snapctx.alsaplayer_ctx.playing || ((!snapctx.alsaplayer_ctx.playing) && tdiff.sign > 0) || is_near) {
 		intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
-		// print_packet(p->data, p->size);
 		if (chunk_is_empty(p)) {
 			snapctx.alsaplayer_ctx.empty_chunks_in_row++;
 			if (snapctx.alsaplayer_ctx.empty_chunks_in_row > 5)
@@ -116,7 +111,8 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		} else {
 			snapctx.alsaplayer_ctx.playing = true;
 			snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
-			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000 , (int)(1.2 * snapctx.bufferms) % 1000);
+			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
+					(int)(1.2 * snapctx.bufferms) % 1000);
 		}
 	} else
 		get_emptychunk(p);
@@ -124,8 +120,8 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	if (!is_near) {
 		factor = 1 - adjustment * tdiff.sign;
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
-		if (! not_even_close) {
-			log_verbose("Timing is not even close, replacing chunk data with silence!\n");
+		if (!not_even_close) {
+			log_debug("Timing is not even close, replacing chunk data with silence!\n");
 			memset(p->data, 0, p->size);
 			p->play_at_tv_sec = 0;
 
@@ -134,47 +130,42 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		}
 	}
 
-	if (! chunk_is_empty(p)) // save CPU when chunk contains only silence
+	if (!chunk_is_empty(p))  // save CPU and do not resample, when chunk contains only silence
 		adjust_speed(p, factor);
 
 	// TODO adjust volume
-	// TODO: PRINT THE BELOW LINE IN VERBOSE MODE
-/*
- *
-	log_verbose("status: %d chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n",
-		    snapctx.alsaplayer_ctx.playing, p->size, print_timespec(&ctime), print_timespec(&p->play_at), print_timespec(&tdiff.time),
-		    tdiff.sign);
-*/
+
+	log_verbose("status: %d chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n", snapctx.alsaplayer_ctx.playing,
+		    p->size, print_timespec(&ctime), print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
 	return p->size;
 }
 
 void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	unsigned int pcm;
-	snd_pcm_sframes_t delayp;
+	snd_pcm_sframes_t delayp = 0;
 	pcmChunk chunk;
 
 	if (snd_pcm_delay(ctx->pcm_handle, &delayp) < 0)
-		log_error("could not obtain cm delay\n");
+		log_error("could not obtain pcm delay\n");
 
 	if ((getchunk(&chunk, delayp)) == 0) {
-		log_error("end of data\n");  // TODO: schedule job to close alsa socket in alsatimeout ms. - still keep the sleep to reduce cpu
+		log_error("end of data\n");
 	}
 
- 	log_debug("Handling alsa frames: %d\n", ctx->frames);
-	print_packet(chunk.data, chunk.size);
-	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data,  chunk.size / chunk.channels / chunk.frame_size)) == -EPIPE) {
+	log_debug("Handling %d alsa frames, delay: %i\n", ctx->frames, delayp);
+
+	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, chunk.size / chunk.channels / chunk.frame_size)) == -EPIPE) {
 		log_error("XRUN.\n");
 		snd_pcm_prepare(ctx->pcm_handle);
 	} else if (pcm < 0) {
 		log_error("ERROR. Can't write to PCM device. %s, snd_pcm_recover(%d)\n", snd_strerror(pcm),
 			  (int)snd_pcm_recover(ctx->pcm_handle, pcm, 0));
 	} else if (pcm < chunk.size / ctx->channels / ctx->frame_size) {
-		log_error("ERROR. write to pcm was not successful for all the data - THIS LIKELY IS A BUG");  // TODO: should we write the rest of the
+		log_error("ERROR. write to pcm was not successful for all the data - THIS IS A BUG");  // if this happens, then epoll is returning too
+												       // early - adjust alsaplayer_init()
 	}
 
 	free(chunk.data);
-
-	log_verbose("PCM delay frames: %d\n", delayp);
 }
 
 void alsaplayer_uninit_task(void *d) {
@@ -198,7 +189,7 @@ void alsaplayer_pcm_list() {
 		if (io != NULL && strcmp(io, "Output") != 0)
 			goto __end;
 		pcmDevice.name = name;
-		
+
 		if (descr == NULL) {
 			pcmDevice.description = "";
 		} else {
@@ -219,7 +210,6 @@ void alsaplayer_pcm_list() {
 	snd_device_name_free_hint(hints);
 }
 
-
 void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	if (!ctx->initialized)
 		return;
@@ -229,8 +219,8 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	free(ctx->ufds);
 
 	for (int i = 0; i < ctx->pollfd_count; i++) {
-		log_debug("size: %d %d %d\n", i, sizeof(*(ctx->main_poll_fd)) , sizeof(struct pollfd)) ;
-		ctx->main_poll_fd[i].fd = - (ctx->main_poll_fd[i]).fd;
+		log_debug("size: %d %d %d\n", i, sizeof(*(ctx->main_poll_fd)), sizeof(struct pollfd));
+		ctx->main_poll_fd[i].fd = -(ctx->main_poll_fd[i]).fd;
 	}
 }
 
@@ -244,10 +234,8 @@ void init_alsafd(alsaplayer_ctx *ctx) {
 }
 
 // shamelessly stolen from snapcast, however removing the endian adjustment
-void adjustVolume(unsigned char *buffer, size_t count, double volume)
-{
-for (size_t n=0; n<count; ++n)
-	buffer[n] = (buffer[n]) * volume;
+void adjustVolume(unsigned char *buffer, size_t count, double volume) {
+	for (size_t n = 0; n < count; ++n) buffer[n] = (buffer[n]) * volume;
 }
 
 void alsaplayer_init(alsaplayer_ctx *ctx) {
@@ -259,9 +247,9 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 
 	if (ctx->initialized)
 		return;
-	
-	ctx->close_task = post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms * 1.2 ) / 1000 , (int)(snapctx.bufferms * 1.2) % 1000, alsaplayer_uninit_task, NULL, NULL);
-	
+
+	ctx->close_task = post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms * 1.2) / 1000, (int)(snapctx.bufferms * 1.2) % 1000,
+				    alsaplayer_uninit_task, NULL, NULL);
 
 	int buff_size;
 
@@ -286,7 +274,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 		snd_pcm_format = SND_PCM_FORMAT_S32_LE;
 	else
 		exit_error("unsupported format\n");
-	
+
 	if ((pcm = snd_pcm_hw_params_set_format(ctx->pcm_handle, ctx->params, snd_pcm_format)) < 0)
 		log_error("ERROR: Can't set format. %s\n", snd_strerror(pcm));
 
@@ -344,9 +332,9 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 
 	snd_pcm_sw_params_set_avail_min(ctx->pcm_handle, ctx->swparams, ctx->frames);
 	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, ctx->swparams, ctx->frames);
- 	// enable period events when requested
-//	snd_pcm_sw_params_set_period_event(ctx->pcm_handle, ctx->swparams, 1);
-	
+	// enable period events when requested
+	//	snd_pcm_sw_params_set_period_event(ctx->pcm_handle, ctx->swparams, 1);
+
 	snd_pcm_sw_params(ctx->pcm_handle, ctx->swparams);
 	ctx->initialized = true;
 }

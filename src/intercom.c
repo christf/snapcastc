@@ -35,9 +35,7 @@ void free_intercom_task(void *d) {
 	free(data);
 }
 
-
 void realloc_intercom_buffer_when_required(intercom_ctx *ctx, int serverbufferms) {
-
 	if (serverbufferms / snapctx.readms * 2 != ctx->buffer_elements) {
 		log_error("received changed buffer length from server - adjusting local buffer size to %d ms\n", serverbufferms);
 		free(ctx->buffer);
@@ -207,15 +205,15 @@ void intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 
 void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 	intercom_peeknextaudiochunk(ctx, ret);
-	int duration = 0;
+	size_t duration = 0;
 
-	if (ret->samples > 0 && ret->channels > 0 && ret->frame_size > 0 )
+	if (ret->samples > 0 && ret->channels > 0 && ret->frame_size > 0)
 		duration = ret->size * 1000 / (ret->samples * ret->channels * ret->frame_size);
 
 	log_verbose(
-	    "retrieved audio chunk [size: %d, samples: %d, channels: %d, timestamp %lld.%lld duration: %d data: %hhx] from readindex/writeindex: %d/%d, cached chunks: %d "
-	    "buffer_elements: %d,\n",
-	    ret->size, ret->samples, ret->channels, ret->play_at_tv_sec, ret->play_at_tv_nsec, duration, &ret->data, ctx->bufferrindex, ctx->bufferwindex,
+	    "retrieved audio chunk [size: %d, samples: %d, channels: %d, timestamp %zu.%zu duration: %zu] from readindex/writeindex: %zu/%zu, cached "
+	    "chunks: %zu buffer_elements: %zu,\n",
+	    ret->size, ret->samples, ret->channels, ret->play_at_tv_sec, ret->play_at_tv_nsec, duration, ctx->bufferrindex, ctx->bufferwindex,
 	    ctx->bufferwindex - ctx->bufferrindex + ctx->buffer_wraparound * ctx->buffer_elements, ctx->buffer_elements);
 	print_packet(ret->data, ret->size);
 
@@ -250,13 +248,13 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 	uint8_t *packetpointer = &((uint8_t *)packet)[currentoffset];
 
 	pcmChunk chunk;
-	pcmChunk *pchunk = (pcmChunk*)packetpointer;
+	pcmChunk *pchunk = (pcmChunk *)packetpointer;
 
 	chunk_copy_meta(&chunk, pchunk);
 	chunk_ntoh(&chunk);
 	chunk.data = snap_alloc(chunk.size);
 
-	memcpy(chunk.data, &pchunk->data, chunk.size); 
+	memcpy(chunk.data, &pchunk->data, chunk.size);
 
 	log_debug("read chunk from packet: %d samples: %d frame size:%d  channels: %d packet_len: %d, hdrsize: %d\n\n", chunk.size, chunk.samples,
 		  chunk.frame_size, chunk.channels, packet_len, sizeof(intercom_packet_audio));
@@ -339,14 +337,14 @@ void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
 	uint8_t packet[sizeof(intercom_packet_audio) + chunksize];
 
 	pcmChunk sendchunk;
-	memcpy(&sendchunk, chunk, sizeof(pcmChunk)); // this does not alter the data pointer
+	memcpy(&sendchunk, chunk, sizeof(pcmChunk));  // this does not alter the data pointer
 	chunk_hton(&sendchunk);
 
 	ssize_t packet_len;
 	packet_len = assemble_header(&((intercom_packet_audio *)packet)->hdr, AUDIO_DATA);
 
-	((intercom_packet_audio*)packet)->bufferms = htons(snapctx.bufferms);
-	packet_len +=sizeof(snapctx.bufferms);
+	((intercom_packet_audio *)packet)->bufferms = htons(snapctx.bufferms);
+	packet_len += sizeof(snapctx.bufferms);
 
 	memcpy(&packet[packet_len], &sendchunk, sizeof(pcmChunk));
 	packet_len += sizeof(pcmChunk) - sizeof(uint8_t *);

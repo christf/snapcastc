@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <sys/time.h>
 
-typedef struct  __attribute__((__packed__)) {
+typedef struct __attribute__((__packed__)) {
 	uint32_t play_at_tv_sec;
 	uint32_t play_at_tv_nsec;
 	uint32_t samples;

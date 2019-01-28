@@ -53,7 +53,7 @@ client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip
 	return ret;
 }
 
-void free_client_members(client_t *client) { // free(client->name); 
+void free_client_members(client_t *client) {  // free(client->name);
 }
 
 struct client *get_client(const uint32_t id) {

@@ -1,7 +1,7 @@
 #include "pcmchunk.h"
+#include "alloc.h"
 #include "snapcast.h"
 #include "util.h"
-#include "alloc.h"
 
 #include <arpa/inet.h>
 #include <time.h>
@@ -11,7 +11,7 @@ void get_emptychunk(pcmChunk *ret) {
 	ret->samples = snapctx.alsaplayer_ctx.rate;
 	ret->channels = snapctx.alsaplayer_ctx.channels;
 	ret->frame_size = snapctx.alsaplayer_ctx.frame_size;
-	ret->size = snapctx.alsaplayer_ctx.rate * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size / (1000 / snapctx.readms);;
+	ret->size = snapctx.alsaplayer_ctx.rate * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size / (1000 / snapctx.readms);
 	ret->play_at_tv_sec = t.tv_sec;
 	ret->play_at_tv_nsec = t.tv_nsec;
 	ret->data = snap_alloc(ret->size);
@@ -43,4 +43,3 @@ void chunk_copy_meta(pcmChunk *dest, pcmChunk *src) {
 	dest->channels = src->channels;
 	dest->size = src->size;
 }
-

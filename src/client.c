@@ -27,11 +27,11 @@
 #include "alloc.h"
 #include "error.h"
 #include "snapcast.h"
+#include "syscallwrappers.h"
 #include "types.h"
 #include "util.h"
 #include "vector.h"
 #include "version.h"
-#include "syscallwrappers.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -60,11 +60,10 @@ void loop() {
 	struct pollfd fds[snapctx.alsaplayer_ctx.pollfd_count + 2];  // allocate fds for alsa events
 
 	int fd_index = 0;
-	snapctx.alsaplayer_ctx.main_poll_fd = fds; // alsa fds must be the first
+	snapctx.alsaplayer_ctx.main_poll_fd = fds;  // alsa fds must be the first
 
 	init_alsafd(&snapctx.alsaplayer_ctx);
 	fd_index += snapctx.alsaplayer_ctx.pollfd_count;
-
 
 	fds[fd_index].fd = snapctx.taskqueue_ctx.fd;
 	fds[fd_index].events = POLLIN;
@@ -72,7 +71,6 @@ void loop() {
 	fds[fd_index].fd = snapctx.intercom_ctx.fd;
 	fds[fd_index].events = POLLIN;
 	fd_index++;
-
 
 	log_verbose("starting loop\n");
 
@@ -91,7 +89,8 @@ void loop() {
 				if (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx)) {
 					// this is a nightmare. alsa logic is meant to be contained in alsaplayer
 					unsigned short revents;
-					snd_pcm_poll_descriptors_revents(snapctx.alsaplayer_ctx.pcm_handle, fds, snapctx.alsaplayer_ctx.pollfd_count, &revents);
+					snd_pcm_poll_descriptors_revents(snapctx.alsaplayer_ctx.pcm_handle, fds, snapctx.alsaplayer_ctx.pollfd_count,
+									 &revents);
 					fds[i].revents = revents;
 				}
 
@@ -130,8 +129,8 @@ void catch_sigterm() {
 	sigaction(SIGTERM, &_sigact, NULL);
 }
 
-#include "pcmchunk.h"
 #include "alsaplayer.h"
+#include "pcmchunk.h"
 
 int main(int argc, char *argv[]) {
 	snapctx.verbose = false;
@@ -146,10 +145,9 @@ int main(int argc, char *argv[]) {
 	snapctx.alsaplayer_ctx.frame_size = 2;
 	snapctx.readms = 5;
 
-
 	// set some defaults
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
-	snapctx.intercom_ctx.mtu = 1500; // Do we need to expose this to the user via cli?
+	snapctx.intercom_ctx.mtu = 1500;  // Do we need to expose this to the user via cli?
 	snapctx.intercom_ctx.serverport = INTERCOM_PORT;
 	obtainrandom(&snapctx.intercom_ctx.nodeid, sizeof(uint32_t), 0);
 
