@@ -8,7 +8,7 @@ set(JSON_C_CFLAGS_OTHER "${_JSON_C_CFLAGS_OTHER}" CACHE STRING "Additional compi
 set(JSON_C_LDFLAGS_OTHER "${_JSON_C_LDFLAGS_OTHER}" CACHE STRING "Additional linker flags for json-c")
 find_package(ALSA REQUIRED)
 
-link_libraries (soxr)
+#link_libraries (rubberband)
 
 if (ALSA_FOUND)
 	include_directories(${ALSA_INCLUDE_DIRS})

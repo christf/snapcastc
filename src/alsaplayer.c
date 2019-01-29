@@ -5,8 +5,7 @@
 #include "util.h"
 
 #include <alsa/asoundlib.h>
-#include <soxr.h>
-//#include <rubberband/rubberband-c.h>
+// #include <rubberband/rubberband-c.h>
 #include <stdio.h>
 
 #include "timespec.h"
@@ -14,36 +13,9 @@
 #define PCM_DEVICE "default"
 #define PERIOD_TIME 30000
 
-// look at af_scaletempo.c from mplayer
-
-// soxr could be interesting. I am under the impression it changes pitch though
 /*
-void adjust_speed(pcmChunk *chunk, char *out, double factor) {
-	// TODO: get rid of this and use a proper library that allows adjusting playback lengths without changing pitch
-	uint16_t inframes = chunk->size / chunk->channels / chunk->frame_size;
-	uint16_t outframes = inframes + ( factor > 1 ? 2: (factor == 1 ? 0 : -2));
-
-	if (factor <= 1) {
-		memcpy(out, chunk->data, outframes * chunk->channels * chunk->frame_size);
-	}
-	else if (factor > 1) {
-		memcpy(&out[2 * chunk->channels*chunk->frame_size], chunk->data, chunk->size);
-		memcpy(out, chunk->data, 2 * chunk->frame_size * chunk->channels); // duplicate the first frames
-	}
-
-	uint16_t olen =  outframes * chunk->channels * chunk->frame_size ;
-	log_error("adjusted frame with len: %d to olen: %d\n", chunk->size, olen);
-	chunk->size = olen;
-}
-*/
-/*
-// librubberband may get more interesting when compressing data. feeding 2048 samples at a time is out of question when using PCM, UDP and float
-void adjust_speed(pcmChunk *chunk, char *out, double factor) {
-
-	if (!resample(chunk, factor)) {
-		memcpy(out, chunk->data, chunk->size);
-		return;
-	}
+// librubberband may get more interesting when compressing data. feeding 2048 samples at a time is out of question when using PCM, UDP and 16 Bit 2 Channel
+void adjust_speed(pcmChunk *chunk, double factor) {
 
 	RubberBandState rbs = rubberband_new(chunk->samples,
 			chunk->channels, RubberBandOptionProcessRealTime,
@@ -58,7 +30,7 @@ void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 	rubberband_set_max_process_size(rbs, inframes);
 	rubberband_process(rbs, (const float *const *)chunk->data, inframes, 0);
 	int  nb_samples = rubberband_available(rbs);
-	rubberband_retrieve(rbs, (float* *const)out, outframes);
+//	rubberband_retrieve(rbs, (float* *const)out, outframes);
 
 //	log_error("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
 	chunk->size = outframes * chunk->channels * chunk->frame_size;
@@ -66,26 +38,20 @@ void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 */
 
 void adjust_speed(pcmChunk *chunk, double factor) {
-
-// TODO: make sure we are adjusting speed to a multiple of (channels * sample_size) 
-
-
-	double orate = chunk->samples * factor;
-	size_t olen = (size_t)(chunk->size * orate / chunk->samples + .5);
-	size_t odone;
-
-	uint8_t *out = snap_alloc(factor * chunk->size);
-
-	soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_QQ, 0); // TODO: make this configurable - Raspi: SOXR_QQ, desktop: SOXR_LQ
-	soxr_io_spec_t io_spec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);  // TODO this should not be hard-coded.
-
-	soxr_error_t error = soxr_oneshot(chunk->samples, orate, chunk->channels, chunk->data, chunk->size / chunk->channels / chunk->frame_size,
-					  NULL, out, olen, &odone, &io_spec, &quality_spec, NULL);
-
-	log_debug("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
-	free(chunk->data);
-	chunk->data = out;
-	chunk->size = olen;
+	// stretch by removing or inserting a single frame at the end of the chunk.
+	// Watch out, this reduces ability to sync when larger chunks are used and does not consider larger factors
+	if (factor == 1)
+		return;
+	else if (factor < 1) {
+		chunk->size = chunk->size - chunk->channels * chunk->frame_size;
+	} else {
+		uint8_t *out = snap_alloc(chunk->size + chunk->channels * chunk->frame_size);
+		memcpy(out, chunk->data, chunk->size);
+		memcpy(&out[chunk->size], &chunk->data[chunk->size - chunk->channels * chunk->frame_size], chunk->channels * chunk->frame_size);
+		free(chunk->data);
+		chunk->data = out;
+		chunk->size = chunk->size + chunk->channels * chunk->frame_size;
+	}
 }
 
 int getchunk(pcmChunk *p, size_t delay_frames) {
@@ -95,7 +61,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	struct timespec ts = ctime;
 
 	int near_ms = 1;
-	int not_even_close_ms = 250; // TODO: do not hard-code, use a valuelike 50 x duration of chunk
+	int not_even_close_ms = 250;
 
 	struct timespec nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
 
@@ -121,23 +87,21 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		get_emptychunk(p);
 
 	if (!is_near) {
-		factor = (1 - (tdiff.sign * (  (double)( tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / 1000 )) );
+		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / 1000)));
 
-// TODO: this factor already works pretty well, there are two issues though:
-// * we may end up with an amount of bytes that does not fit into a proper frame.
-// * we may end up in a local optimum while just playing one frame less or one frame more might be optimal.
+		// TODO: this factor already works pretty well, there are two issues though:
+		// * we may end up in a local optimum while just playing one frame less or one frame more might be optimal.
 
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
 			log_debug("Timing is not even close, replacing chunk data with silence!\n");
-			if (tdiff.sign  < 0 ) { // we are way ahead, play silence
+			if (tdiff.sign < 0) {  // we are way ahead, play silence
 				memset(p->data, 0, p->size);
 				p->play_at_tv_sec = 0;
 
 				snapctx.alsaplayer_ctx.playing = false;
 				snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
-			}
-			else { // we are way behind, drop chunk to allow syncing
+			} else {  // we are way behind, drop chunk to allow syncing
 				p->size = 0;
 				p->play_at_tv_sec = 0;
 				free(p->data);
@@ -146,13 +110,14 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		}
 	}
 
-	if (!chunk_is_empty(p))  // save CPU and do not resample, when chunk contains only silence
-		adjust_speed(p, factor);
+	//	if (!chunk_is_empty(p))  // save CPU and do not resample, when chunk contains only silence
+	adjust_speed(p, factor);
 
 	// TODO adjust volume
 
-	log_verbose("status: %d factor: %f chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n", snapctx.alsaplayer_ctx.playing, factor, 
-			p->size, print_timespec(&ctime), print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
+	log_verbose("status: %d factor: %f chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n",
+		    snapctx.alsaplayer_ctx.playing, factor, p->size, print_timespec(&ctime), print_timespec(&ts), print_timespec(&tdiff.time),
+		    tdiff.sign);
 
 	return p->size;
 }
@@ -169,7 +134,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 
 	if (ret == 0) {
 		log_error("end of data\n");
-	} else if (ret == -1 ) { // dropping chunk
+	} else if (ret == -1) {  // dropping chunk
 		return;
 	}
 
