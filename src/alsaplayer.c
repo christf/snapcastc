@@ -66,13 +66,17 @@ void adjust_speed(pcmChunk *chunk, char *out, double factor) {
 */
 
 void adjust_speed(pcmChunk *chunk, double factor) {
+
+// TODO: make sure we are adjusting speed to a multiple of (channels * sample_size) 
+
+
 	double orate = chunk->samples * factor;
 	size_t olen = (size_t)(chunk->size * orate / chunk->samples + .5);
 	size_t odone;
 
 	uint8_t *out = snap_alloc(factor * chunk->size);
 
-	soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_MQ, 0);
+	soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_QQ, 0); // TODO: make this configurable - Raspi: SOXR_QQ, desktop: SOXR_LQ
 	soxr_io_spec_t io_spec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);  // TODO this should not be hard-coded.
 
 	soxr_error_t error = soxr_oneshot(chunk->samples, orate, chunk->channels, chunk->data, chunk->size / chunk->channels / chunk->frame_size,
@@ -85,14 +89,13 @@ void adjust_speed(pcmChunk *chunk, double factor) {
 }
 
 int getchunk(pcmChunk *p, size_t delay_frames) {
-	const double adjustment = 0.01;
 	double factor = 1;
 	struct timespec ctime;
 	obtainsystime(&ctime);
 	struct timespec ts = ctime;
 
 	int near_ms = 1;
-	int not_even_close_ms = 500;
+	int not_even_close_ms = 250; // TODO: do not hard-code, use a valuelike 50 x duration of chunk
 
 	struct timespec nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
 
@@ -118,15 +121,28 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		get_emptychunk(p);
 
 	if (!is_near) {
-		factor = 1 - adjustment * tdiff.sign;
+		factor = (1 - (tdiff.sign * (  (double)( tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / 1000 )) );
+
+// TODO: this factor already works pretty well, there are two issues though:
+// * we may end up with an amount of bytes that does not fit into a proper frame.
+// * we may end up in a local optimum while just playing one frame less or one frame more might be optimal.
+
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
 			log_debug("Timing is not even close, replacing chunk data with silence!\n");
-			memset(p->data, 0, p->size);
-			p->play_at_tv_sec = 0;
+			if (tdiff.sign  < 0 ) { // we are way ahead, play silence
+				memset(p->data, 0, p->size);
+				p->play_at_tv_sec = 0;
 
-			snapctx.alsaplayer_ctx.playing = false;
-			snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
+				snapctx.alsaplayer_ctx.playing = false;
+				snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
+			}
+			else { // we are way behind, drop chunk to allow syncing
+				p->size = 0;
+				p->play_at_tv_sec = 0;
+				free(p->data);
+				return -1;
+			}
 		}
 	}
 
@@ -135,8 +151,9 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 
 	// TODO adjust volume
 
-	log_verbose("status: %d chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n", snapctx.alsaplayer_ctx.playing,
-		    p->size, print_timespec(&ctime), print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
+	log_verbose("status: %d factor: %f chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n", snapctx.alsaplayer_ctx.playing, factor, 
+			p->size, print_timespec(&ctime), print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
+
 	return p->size;
 }
 
@@ -148,8 +165,12 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	if (snd_pcm_delay(ctx->pcm_handle, &delayp) < 0)
 		log_error("could not obtain pcm delay\n");
 
-	if ((getchunk(&chunk, delayp)) == 0) {
+	int ret = getchunk(&chunk, delayp);
+
+	if (ret == 0) {
 		log_error("end of data\n");
+	} else if (ret == -1 ) { // dropping chunk
+		return;
 	}
 
 	log_debug("Handling %d alsa frames, delay: %i\n", ctx->frames, delayp);
