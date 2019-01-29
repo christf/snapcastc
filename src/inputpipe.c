@@ -52,6 +52,7 @@ void set_idle(void *d) {
 	log_verbose("INPUT_UNDERRUN... this will be audible.\n");
 	snapctx.inputpipe_ctx.state = IDLE;
 	snapctx.inputpipe_ctx.idle_task = NULL;
+	snapctx.inputpipe_ctx.data_read = 0;
 }
 
 int inputpipe_handle(inputpipe_ctx *ctx) {
@@ -68,11 +69,14 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		return -1;
 
 	ssize_t count = read(ctx->fd, &(ctx->chunk.data)[ctx->data_read], ctx->chunksize - ctx->data_read);
-	ctx->data_read += count;
 
-	if (count == 0) {
+	if (count == -1) {
+		perror("reading input pipe failed");
+	}
+	else if (count == 0) {
 		ctx->state = IDLE;
-	} else if (count && (ctx->state == IDLE)) {
+	} else if ((count > 0) && (ctx->state == IDLE)) {
+		ctx->data_read += count;
 		ctx->state = PLAYING;
 		ctx->chunk.play_at_tv_sec = readuntil.tv_sec;
 		ctx->chunk.play_at_tv_nsec = readuntil.tv_nsec;
@@ -84,7 +88,8 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 			  print_timespec(&(struct timespec){.tv_sec = ctx->chunk.play_at_tv_sec, .tv_nsec = ctx->chunk.play_at_tv_nsec}),
 			  print_timespec(&ctime));
 		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, get_pipe_length(ctx->chunksize), 0, set_idle, NULL, &snapctx.efd);
-	} else if (ctx->state == PLAYING) {
+	} else if ((count > 0 )&& (ctx->state == PLAYING)) {
+		ctx->data_read += count;
 		// when incrementing timestamp, do not rely on local clock as data data may and will be read at a speed different than playback.
 		struct timespec play_at;
 		play_at.tv_sec = ctx->chunk.play_at_tv_sec;
@@ -122,5 +127,6 @@ void inputpipe_init(inputpipe_ctx *ctx) {
 	ctx->chunk.samples = snapctx.samples;
 	ctx->chunk.frame_size = snapctx.frame_size;
 	ctx->chunk.channels = snapctx.channels;
+	ctx->data_read = 0;
 	ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
 }
