@@ -22,6 +22,7 @@
 #include "inputpipe.h"
 #include "intercom.h"
 #include "taskqueue.h"
+#include "opuscodec.h"
 #include "types.h"
 
 #include <stddef.h>
@@ -38,6 +39,7 @@ struct snapctx {
 	alsaplayer_ctx alsaplayer_ctx;
 	clientmgr_ctx clientmgr_ctx;
 	intercom_ctx intercom_ctx;
+	opuscodec_ctx opuscodec_ctx;
 
 	int efd;
 	int bufferms;

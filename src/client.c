@@ -100,6 +100,7 @@ void loop() {
 				} else if ((fds[i].revents & POLLIN) && (fds[i].fd == snapctx.intercom_ctx.fd)) {
 					log_debug("intercom ready for IO\n");
 					intercom_handle_in(&snapctx.intercom_ctx, fds[i].fd);
+
 					if (!snapctx.alsaplayer_ctx.initialized) {
 						log_error("initializing alsa\n");
 						alsaplayer_init(&snapctx.alsaplayer_ctx);
@@ -144,6 +145,7 @@ int main(int argc, char *argv[]) {
 	snapctx.alsaplayer_ctx.channels = 2;
 	snapctx.alsaplayer_ctx.frame_size = 2;
 	snapctx.readms = 5;
+	snapctx.alsaplayer_ctx.pcm.name = strdup("default");
 
 	// set some defaults
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
@@ -163,6 +165,7 @@ int main(int argc, char *argv[]) {
 #endif
 				exit(EXIT_SUCCESS);
 			case 's':
+				free(snapctx.alsaplayer_ctx.pcm.name);
 				snapctx.alsaplayer_ctx.pcm.name = strdupa(optarg);
 				break;
 			case 'l':
@@ -234,6 +237,7 @@ int main(int argc, char *argv[]) {
 	taskqueue_init(&snapctx.taskqueue_ctx);
 
 	alsaplayer_init(&snapctx.alsaplayer_ctx);
+
 	intercom_init(&snapctx.intercom_ctx);
 	intercom_hello(&snapctx.intercom_ctx, &snapctx.intercom_ctx.serverip, snapctx.intercom_ctx.serverport);
 

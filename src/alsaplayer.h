@@ -26,6 +26,7 @@
 #pragma once
 
 #include "taskqueue.h"
+#include "pcmchunk.h"
 
 #include <alsa/asoundlib.h>
 #include <stdbool.h>
@@ -53,6 +54,8 @@ typedef struct {
 	int pollfd_count;
 	struct pollfd *ufds;
 	struct pollfd *main_poll_fd;
+
+	pcmChunk *overflow;
 
 	bool initialized;
 	bool playing;

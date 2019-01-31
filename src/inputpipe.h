@@ -35,7 +35,6 @@ enum inputpipe_state { IDLE = 0, PLAYING };
 typedef struct {
 	struct snapctx *snapctx;
 	char *fname;
-	char *buf;
 	pcmChunk chunk;
 
 	enum inputpipe_state state;

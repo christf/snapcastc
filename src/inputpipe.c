@@ -46,7 +46,7 @@ int get_pipe_length(size_t chunksize) {
 	return (4 * 1024 * 1024) / chunksize / (1000 / snapctx.readms);
 }
 
-bool is_chunk_complete(inputpipe_ctx *ctx) { return (ctx->chunk.size == ctx->data_read); }
+bool is_chunk_complete(inputpipe_ctx *ctx) { return (ctx->chunksize == ctx->data_read); }
 
 void set_idle(void *d) {
 	log_verbose("INPUT_UNDERRUN... this will be audible.\n");
@@ -60,7 +60,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	obtainsystime(&ctime);
 
 	// do not over-read
-	struct timespec readuntil = timeAddMs(&ctime, snapctx.bufferms / 4 * 5);  // target 80% buffer fill-rate
+	struct timespec readuntil = timeAddMs(&ctime, snapctx.bufferms * 5 / 4);  // target 80% buffer fill-rate
 	bool buffer_full = (timespec_cmp(ctx->lastchunk, readuntil) > 0);
 
 	log_debug("reading chunk until %s,  lastchunk was for %s, compare result: %i\n", print_timespec(&readuntil), print_timespec(&ctx->lastchunk),
@@ -72,8 +72,8 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 
 	if (count == -1) {
 		perror("reading input pipe failed");
-	}
-	else if (count == 0) {
+	} else if (count == 0) {
+		log_debug("read %d Bytes from inputpipe, data_read: %d chunksize: %d\n", count, ctx->data_read, ctx->chunksize);
 		ctx->state = IDLE;
 	} else if ((count > 0) && (ctx->state == IDLE)) {
 		ctx->data_read += count;
@@ -88,32 +88,34 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 			  print_timespec(&(struct timespec){.tv_sec = ctx->chunk.play_at_tv_sec, .tv_nsec = ctx->chunk.play_at_tv_nsec}),
 			  print_timespec(&ctime));
 		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, get_pipe_length(ctx->chunksize), 0, set_idle, NULL, &snapctx.efd);
-	} else if ((count > 0 )&& (ctx->state == PLAYING)) {
+	} else if ((count > 0) && (ctx->state == PLAYING)) {
+		log_debug("read %d Bytes from inputpipe\n", count);
 		ctx->data_read += count;
-		// when incrementing timestamp, do not rely on local clock as data data may and will be read at a speed different than playback.
+		reschedule_task(&snapctx.taskqueue_ctx, ctx->idle_task, get_pipe_length(ctx->chunksize), 0);
+	}
+
+	if (is_chunk_complete(ctx)) {
 		struct timespec play_at;
 		play_at.tv_sec = ctx->chunk.play_at_tv_sec;
 		play_at.tv_nsec = ctx->chunk.play_at_tv_nsec;
 
 		play_at = timeAddMs(&play_at, snapctx.readms);
+		timediff t = timeSub(&ctime, &play_at);
 		ctx->chunk.play_at_tv_sec = play_at.tv_sec;
 		ctx->chunk.play_at_tv_nsec = play_at.tv_nsec;
-
-		timediff t = timeSub(&ctime, &play_at);
-		log_debug("read chunk that is to be played at %s, current time %s, diff: %s\n", print_timespec(&play_at), print_timespec(&ctime),
-			  print_timespec(&t.time));
 		ctx->lastchunk = play_at;
-		reschedule_task(&snapctx.taskqueue_ctx, ctx->idle_task, get_pipe_length(ctx->chunksize), 0);
-	}
 
-	if (is_chunk_complete(ctx)) {
-		log_debug("read %lu Bytes of data from %s, last read was %lu, reader state: %i, PLAYING: %i, IDLE: %i\n", ctx->data_read, ctx->fname,
-			  count, ctx->state, PLAYING, IDLE);
-		print_packet(ctx->chunk.data, ctx->chunk.size);
+		log_verbose(
+		    "read %lu Bytes of data from %s, last read was %lu, reader state: %i, PLAYING: %i, IDLE: %i, to be played at %s, current time "
+		    "%s, diff: %s\n",
+		    ctx->data_read, ctx->fname, count, ctx->state, PLAYING, IDLE, print_timespec(&play_at), print_timespec(&ctime),
+		    print_timespec(&t.time));
+// 		print_packet(ctx->chunk.data, ctx->chunk.size);
 		ctx->chunk.size = ctx->data_read;
 		ctx->chunk.frame_size = snapctx.frame_size;
 		ctx->chunk.samples = snapctx.samples;
 		ctx->chunk.channels = snapctx.channels;
+		ctx->chunk.codec = CODEC_PCM;
 		ctx->data_read = 0;
 		return 1;
 	}
@@ -121,7 +123,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 }
 
 void inputpipe_init(inputpipe_ctx *ctx) {
-	ctx->chunksize = snapctx.samples * snapctx.channels * snapctx.frame_size / (1000 / snapctx.readms);
+	ctx->chunksize = snapctx.samples * snapctx.channels * snapctx.frame_size * snapctx.readms / 1000;
 	ctx->chunk.data = snap_alloc(ctx->chunksize);
 	ctx->chunk.size = ctx->chunksize;
 	ctx->chunk.samples = snapctx.samples;
@@ -130,3 +132,4 @@ void inputpipe_init(inputpipe_ctx *ctx) {
 	ctx->data_read = 0;
 	ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
 }
+

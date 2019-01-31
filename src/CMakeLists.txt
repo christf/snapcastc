@@ -7,9 +7,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SNAPCAST_BINARY_DIR} ${CMAKE_C
 
 # TODO the clientmgr should only be linked into the server. since intercom includes it, it currently must be in both
 add_executable(snapcast-server server.c util.c taskqueue.c util.c timespec.c
-	vector.c inputpipe.c clientmgr.c intercom.c syscallwrappers.c pcmchunk.c)
+	vector.c inputpipe.c clientmgr.c intercom.c syscallwrappers.c pcmchunk.c opuscodec.c)
 add_executable(snapcast-client client.c util.c taskqueue.c util.c timespec.c
-	vector.c alsaplayer.c intercom.c syscallwrappers.c clientmgr.c pcmchunk.c)
+	vector.c alsaplayer.c intercom.c syscallwrappers.c clientmgr.c pcmchunk.c opuscodec.c)
 
 
 target_link_libraries(snapcast-server ${JSON_C_LIBRARIES})

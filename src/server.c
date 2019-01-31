@@ -32,6 +32,7 @@
 #include "util.h"
 #include "vector.h"
 #include "version.h"
+#include "opuscodec.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -46,6 +47,10 @@
 #include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
+
+#define IPOVERHEAD_BYTES 40
+#define UDPOVERHEAD_BYTES 8
+#define PCMCHUNK_HEADER_SIZE 17
 
 snapctx_t snapctx = {};
 
@@ -99,9 +104,10 @@ void loop() {
 					log_debug("throttling input from fifo\n");
 					post_task(&snapctx.taskqueue_ctx, 0, snapctx.readms, resume_read, NULL, &efd);
 				} else if (ret == 1) {
-					// TODO: when full chunk was read, start encoder here
+					// TODO: only encode when there is at least one client to save CPU cycles
+					encode_opus_handle(&snapctx.inputpipe_ctx.chunk);
 					intercom_send_audio(&snapctx.intercom_ctx, &snapctx.inputpipe_ctx.chunk);
-					print_packet(snapctx.inputpipe_ctx.chunk.data, 960);
+					print_packet(snapctx.inputpipe_ctx.chunk.data, snapctx.inputpipe_ctx.chunk.size);
 				}
 			} else if ((snapctx.intercom_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				intercom_handle_in(&snapctx.intercom_ctx, events[i].data.fd);
@@ -144,6 +150,7 @@ int main(int argc, char *argv[]) {
 	snapctx.frame_size = 2;   // set default
 	snapctx.channels = 2;     // set default
 	snapctx.readms = 5;       // set default
+	snapctx.opuscodec_ctx.bitrate = 96000;       // set default
 
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
@@ -188,6 +195,8 @@ int main(int argc, char *argv[]) {
 	taskqueue_init(&snapctx.taskqueue_ctx);
 	if (snapctx.inputpipe_ctx.fname)
 		inputpipe_init(&snapctx.inputpipe_ctx);
+
+	opus_init_encoder(snapctx.intercom_ctx.mtu - IPOVERHEAD_BYTES - sizeof(intercom_packet_hdr) - PCMCHUNK_HEADER_SIZE - UDPOVERHEAD_BYTES);
 	clientmgr_init(&snapctx.clientmgr_ctx);
 
 	intercom_init(&snapctx.intercom_ctx);

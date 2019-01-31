@@ -84,9 +84,10 @@ snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default -i 12
 ## Status and Roadmap
 
 * Audio Playback [Working]
-* Usage of UDP for transporting media data [Working]
-* Support for Opus [patches welcome]
-* Synchronous playback retaining audio quality, resample using libsoxr  [Working]
+* Usage of UDP for transporting media data [Working, no retries yet, patches welcome]
+* Support for Opus [Working]
+* Synchronous playback by dropping / inserting single frames  [Working]
+* Synchronous playback by time stretching audio chunks using librubberband  [patches welcome]
 * Support for Snapcast android app [patches welcome]
 * implement missing command line options [patches welcome]
 
@@ -101,11 +102,11 @@ snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default -i 12
 
 ### Dependencies
 
-    apt install libsoxr libasound2 libopus libjson-c3
+    apt install libasound2 libopus libjson-c3 librubberband2
     
 ### Build
 
-    apt install libsoxr-dev libasound2-dev libopus-dev build-essential git libjson-c3-dev
+    apt install librubberband-dev libasound2-dev libopus-dev build-essential git libjson-c3-dev
 
 in the root of this project, run:
 ```

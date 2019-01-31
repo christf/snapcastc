@@ -5,7 +5,7 @@
 #include "util.h"
 
 #include <alsa/asoundlib.h>
-// #include <rubberband/rubberband-c.h>
+#include <rubberband/rubberband-c.h>
 #include <stdio.h>
 
 #include "timespec.h"
@@ -13,33 +13,31 @@
 #define PCM_DEVICE "default"
 #define PERIOD_TIME 30000
 
-/*
-// librubberband may get more interesting when compressing data. feeding 2048 samples at a time is out of question when using PCM, UDP and 16 Bit 2 Channel
-void adjust_speed(pcmChunk *chunk, double factor) {
+// librubberband may get more interesting when compressing data. feeding 2048 samples at a time is out of question when using PCM, UDP and 16 Bit 2
+// Channel
+void adjust_speed_rubber(pcmChunk *chunk, double factor) {
+	RubberBandState rbs = rubberband_new(chunk->samples, chunk->channels, RubberBandOptionProcessRealTime, factor, 1);
 
-	RubberBandState rbs = rubberband_new(chunk->samples,
-			chunk->channels, RubberBandOptionProcessRealTime,
-			factor,
-			1);
 	uint16_t inframes = chunk->size / chunk->channels / chunk->frame_size;
 	uint16_t outframes = chunk->size / chunk->channels / chunk->frame_size * factor;
 
+	rubberband_set_expected_input_duration(rbs, snapctx.alsaplayer_ctx.frames);
+	unsigned int required = rubberband_get_samples_required(rbs);
+	log_error("required samples: %d, have: %d, alsa frames: %ld\n", required, inframes, snapctx.alsaplayer_ctx.frames);
 	rubberband_set_max_process_size(rbs, inframes);
-	unsigned int required =  rubberband_get_samples_required(rbs);
-	log_error("required samples: %d, have: %d\n", required, inframes);
-	rubberband_set_max_process_size(rbs, inframes);
-	rubberband_process(rbs, (const float *const *)chunk->data, inframes, 0);
-	int  nb_samples = rubberband_available(rbs);
-//	rubberband_retrieve(rbs, (float* *const)out, outframes);
 
-//	log_error("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
+	rubberband_process(rbs, (const float *const *)chunk->data, inframes, 0);
+	int nb_samples = rubberband_available(rbs);
+	//	rubberband_retrieve(rbs, (float* *const)out, outframes);
+
+	//	log_error("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
 	chunk->size = outframes * chunk->channels * chunk->frame_size;
 }
-*/
 
-void adjust_speed(pcmChunk *chunk, double factor) {
+void adjust_speed_simple(pcmChunk *chunk, double factor) {
 	// stretch by removing or inserting a single frame at the end of the chunk.
-	// Watch out, this reduces ability to sync when larger chunks are used and does not consider larger factors
+	// Beware: This reduces ability to sync when larger chunks are used and the logic does not consider the factor at all beyond it being larger
+	// or smaller than 1.
 	if (factor == 1)
 		return;
 	else if (factor < 1) {
@@ -52,6 +50,11 @@ void adjust_speed(pcmChunk *chunk, double factor) {
 		chunk->data = out;
 		chunk->size = chunk->size + chunk->channels * chunk->frame_size;
 	}
+}
+
+void adjust_speed(pcmChunk *chunk, double factor) {
+	// TODO: should we be able to select this via cli option?
+	adjust_speed_simple(chunk, factor);
 }
 
 int getchunk(pcmChunk *p, size_t delay_frames) {
@@ -130,15 +133,21 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	if (snd_pcm_delay(ctx->pcm_handle, &delayp) < 0)
 		log_error("could not obtain pcm delay\n");
 
-	int ret = getchunk(&chunk, delayp);
+	int ret;
+
+	if (!ctx->overflow)
+		ret = getchunk(&chunk, delayp);
+	else {
+		chunk = *ctx->overflow;
+		ret = chunk.size;
+		log_debug("writing %d overflow bytes (%d frames) to PCM %d\n", chunk.size, chunk.size / chunk.channels / chunk.frame_size);
+	}
 
 	if (ret == 0) {
 		log_error("end of data\n");
 	} else if (ret == -1) {  // dropping chunk
 		return;
 	}
-
-	log_debug("Handling %d alsa frames, delay: %i\n", ctx->frames, delayp);
 
 	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, chunk.size / chunk.channels / chunk.frame_size)) == -EPIPE) {
 		log_error("XRUN.\n");
@@ -147,15 +156,24 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		log_error("ERROR. Can't write to PCM device. %s, snd_pcm_recover(%d)\n", snd_strerror(pcm),
 			  (int)snd_pcm_recover(ctx->pcm_handle, pcm, 0));
 	} else if (pcm < chunk.size / ctx->channels / ctx->frame_size) {
-		log_error("ERROR. write to pcm was not successful for all the data - THIS IS A BUG");  // if this happens, then epoll is returning too
-												       // early - adjust alsaplayer_init()
-	}
+		if (!ctx->overflow) {
+			ctx->overflow = snap_alloc(sizeof(pcmChunk));
+			chunk_copy_meta(ctx->overflow, &chunk);
+			ctx->overflow->data = chunk.data;
+		}
+		pcmchunk_shaveoff(ctx->overflow, pcm);
 
-	free(chunk.data);
+		log_debug("----- NO ERROR ----  %d/%d bytes to pcm - splitting chunk to write the rest at a later stage\n", pcm,
+			  chunk.size / ctx->channels / ctx->frame_size);
+	} else if (pcm == chunk.size / ctx->channels / ctx->frame_size) {
+		chunk_free_members(&chunk);
+		free(ctx->overflow);
+		ctx->overflow = NULL;
+	}
 }
 
 void alsaplayer_uninit_task(void *d) {
-	log_error("UNITIALIZING ALSA!!!!!!     !!!!!!\n\n\n\n");
+	log_verbose("unititializing alsa after timeout\n");
 	alsaplayer_uninit(&snapctx.alsaplayer_ctx);
 }
 
@@ -191,7 +209,7 @@ void alsaplayer_pcm_list() {
 			free(descr);
 		if (io != NULL)
 			free(io);
-		n++;
+		++n;
 	}
 	snd_device_name_free_hint(hints);
 }
@@ -204,8 +222,7 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	ctx->initialized = ctx->playing = false;
 	free(ctx->ufds);
 
-	for (int i = 0; i < ctx->pollfd_count; i++) {
-		log_debug("size: %d %d %d\n", i, sizeof(*(ctx->main_poll_fd)), sizeof(struct pollfd));
+	for (int i = 0; i < ctx->pollfd_count; ++i) {
 		ctx->main_poll_fd[i].fd = -(ctx->main_poll_fd[i]).fd;
 	}
 }
@@ -219,7 +236,6 @@ void init_alsafd(alsaplayer_ctx *ctx) {
 	}
 }
 
-// shamelessly stolen from snapcast, however removing the endian adjustment
 void adjustVolume(unsigned char *buffer, size_t count, double volume) {
 	for (size_t n = 0; n < count; ++n) buffer[n] = (buffer[n]) * volume;
 }
@@ -230,6 +246,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 
 	ctx->empty_chunks_in_row = 0;
 	ctx->playing = false;
+	ctx->overflow = NULL;
 
 	if (ctx->initialized)
 		return;
@@ -294,7 +311,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	log_verbose("rate: %d bps\n", tmp);
 
 	snd_pcm_hw_params_get_period_size(ctx->params, &ctx->frames, 0);
-	log_verbose("frames: %d\n", &ctx->frames);
+	log_verbose("frames: %ld\n", ctx->frames);
 
 	buff_size = ctx->frames * ctx->channels * ctx->frame_size /* 2 -> sample size */;
 	log_verbose("alsa requested buff_size: %d\n", buff_size);
@@ -317,6 +334,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	snd_pcm_sw_params_current(ctx->pcm_handle, ctx->swparams);
 
 	snd_pcm_sw_params_set_avail_min(ctx->pcm_handle, ctx->swparams, ctx->frames);
+
 	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, ctx->swparams, ctx->frames);
 	// enable period events when requested
 	//	snd_pcm_sw_params_set_period_event(ctx->pcm_handle, ctx->swparams, 1);
