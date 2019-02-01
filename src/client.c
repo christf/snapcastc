@@ -47,6 +47,8 @@
 #include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 snapctx_t snapctx = {};
 
@@ -240,6 +242,11 @@ int main(int argc, char *argv[]) {
 
 	intercom_init(&snapctx.intercom_ctx);
 	intercom_hello(&snapctx.intercom_ctx, &snapctx.intercom_ctx.serverip, snapctx.intercom_ctx.serverport);
+
+	// we have realtime business when feeding the alsa buffer, setting prio may help on an otherwise busy client.
+	if ( setpriority(PRIO_PROCESS, 0, -5) ) {
+		log_error("could not set priority\n");
+	}
 
 	loop();
 
