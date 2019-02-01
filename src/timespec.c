@@ -36,26 +36,26 @@ int timespec_isnear(struct timespec *t1, struct timespec *t2, int chunkms) {
 	return 0;
 }
 
-timediff timeSub(struct timespec *t1, struct timespec *t2) {
+timediff timeSub(const struct timespec *t1, const struct timespec *t2) {
 	timediff ret;
-	struct timespec *tmp;
+	struct timespec *it1 = (struct timespec*)t1;
+	struct timespec *it2 = (struct timespec*)t2;
 
 	ret.sign = 1;
 
 	if (timespec_cmp(*t1, *t2) < 0) {
-		tmp = t1;
-		t1 = t2;
-		t2 = tmp;
+		it1 = (struct timespec*)t2;
+		it2 = (struct timespec*)t1;
 		ret.sign = -1;
-	}
+	} // now t1 is always greater than t2
 
-	uint64_t tdiff_sec = t1->tv_sec - t2->tv_sec;
-	uint64_t tdiff_nsec;
-	if (t1->tv_nsec >= t2->tv_nsec)
-		tdiff_nsec = t1->tv_nsec - t2->tv_nsec;
-	else {
+	uint64_t tdiff_sec = it1->tv_sec - it2->tv_sec;
+	uint64_t tdiff_nsec = 0;
+	if (it1->tv_nsec >= it2->tv_nsec) {
+		tdiff_nsec = it1->tv_nsec - it2->tv_nsec;
+	} else {
 		tdiff_sec--;
-		tdiff_nsec = 1000000000l - t2->tv_nsec + t1->tv_nsec;
+		tdiff_nsec = 1000000000UL - it2->tv_nsec + it1->tv_nsec;
 	}
 
 	ret.time.tv_sec = tdiff_sec;
