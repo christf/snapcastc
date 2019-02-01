@@ -12,14 +12,17 @@
 
 void decode_opus_handle(pcmChunk *chunk) {
 	struct timespec ctime;
-	obtainsystime(&ctime);
-	log_error("starting decoder at %s\n", print_timespec(&ctime));
+	if (snapctx.debug) {
+		obtainsystime(&ctime);
+		log_debug("starting decoder at %s\n", print_timespec(&ctime));
+	}
+
 	uint8_t
 	    *out[MAX_FRAMES * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size];  // maximum for opus chunk: 60ms data at 48000:2:2
 	int frames = opus_decode(snapctx.opuscodec_ctx.decoder, chunk->data, chunk->size, (opus_int16 *)out, MAX_FRAMES, 0);
 	if (frames < 0) {
 		log_error("decoder failed: %s\n", opus_strerror(frames));
-		chunk->size = 0;
+		memset(chunk->data, 0, chunk->size);
 		return;
 	}
 
@@ -29,9 +32,11 @@ void decode_opus_handle(pcmChunk *chunk) {
 	chunk->size = frames * chunk->channels * chunk->frame_size;
 	chunk->codec = CODEC_PCM;
 	memcpy(dout, out, chunk->size);
-	log_debug("decode happened, adjusting chunk size: %d\n", chunk->size);
-	obtainsystime(&ctime);
-	log_error("starting decoder at %s\n", print_timespec(&ctime));
+
+	if (snapctx.debug) {
+		obtainsystime(&ctime);
+		log_debug("finished decoder at %s\n", print_timespec(&ctime));
+	}
 }
 
 void encode_opus_handle(pcmChunk *chunk) {
