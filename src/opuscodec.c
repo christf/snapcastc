@@ -5,10 +5,15 @@
 #include "snapcast.h"
 #include "util.h"
 
+#include "syscallwrappers.h"
+
 // opus will encode / decode max 120ms
 #define MAX_FRAMES (snapctx.samples * 12 / 100)
 
 void decode_opus_handle(pcmChunk *chunk) {
+	struct timespec ctime;
+	obtainsystime(&ctime);
+	log_error("starting decoder at %s\n", print_timespec(&ctime));
 	uint8_t
 	    *out[MAX_FRAMES * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size];  // maximum for opus chunk: 60ms data at 48000:2:2
 	int frames = opus_decode(snapctx.opuscodec_ctx.decoder, chunk->data, chunk->size, (opus_int16 *)out, MAX_FRAMES, 0);
@@ -25,6 +30,8 @@ void decode_opus_handle(pcmChunk *chunk) {
 	chunk->codec = CODEC_PCM;
 	memcpy(dout, out, chunk->size);
 	log_debug("decode happened, adjusting chunk size: %d\n", chunk->size);
+	obtainsystime(&ctime);
+	log_error("starting decoder at %s\n", print_timespec(&ctime));
 }
 
 void encode_opus_handle(pcmChunk *chunk) {
