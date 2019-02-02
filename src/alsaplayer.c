@@ -27,7 +27,7 @@ void adjust_speed_rubber(pcmChunk *chunk, double factor) {
 	rubberband_set_max_process_size(rbs, inframes);
 
 	rubberband_process(rbs, (const float *const *)chunk->data, inframes, 0);
-	int nb_samples = rubberband_available(rbs);
+	// int nb_samples = rubberband_available(rbs);
 	//	rubberband_retrieve(rbs, (float* *const)out, outframes);
 
 	//	log_error("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
@@ -69,6 +69,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	struct timespec nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
 
 	size_t delay_ms_alsa = delay_frames * 1000 / snapctx.alsaplayer_ctx.rate;
+
 	ts = timeAddMs(&ts, delay_ms_alsa);
 
 	timediff tdiff = timeSub(&ts, &nextchunk_playat);
@@ -89,11 +90,14 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	} else
 		get_emptychunk(p);
 
+	if (ts.tv_sec) {
+		log_error("ctime: %s is_near: %d delay_alsa: %d ts: %s, tdiff: %s, tdiff sign: %d\n", print_timespec(&ctime), is_near, delay_ms_alsa, print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
+	}
+
 	if (!is_near) {
 		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / 1000)));
 
-		// TODO: this factor already works pretty well, there are two issues though:
-		// * we may end up in a local optimum while just playing one frame less or one frame more might be optimal.
+		// TODO: this factor already works pretty well, however we may end up in a local optimum while just playing one frame less or one frame more might be optimal.
 
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
@@ -113,8 +117,8 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		}
 	}
 
-	//	if (!chunk_is_empty(p))  // save CPU and do not resample, when chunk contains only silence
-	adjust_speed(p, factor);
+	if (!chunk_is_empty(p))  // save CPU and do not resample, when chunk contains only silence
+		adjust_speed(p, factor);
 
 	// TODO adjust volume
 
@@ -146,6 +150,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	if (ret == 0) {
 		log_error("end of data\n");
 	} else if (ret == -1) {  // dropping chunk
+		log_error("DROPPING CHUNK\n");
 		return;
 	}
 
@@ -156,6 +161,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		log_error("ERROR. Can't write to PCM device. %s, snd_pcm_recover(%d)\n", snd_strerror(pcm),
 			  (int)snd_pcm_recover(ctx->pcm_handle, pcm, 0));
 	} else if (pcm < chunk.size / ctx->channels / ctx->frame_size) {
+		log_debug("delay frames (split): %d\n", delayp);
 		if (!ctx->overflow) {
 			ctx->overflow = snap_alloc(sizeof(pcmChunk));
 			chunk_copy_meta(ctx->overflow, &chunk);
@@ -166,6 +172,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		log_debug("----- NO ERROR ----  %d/%d bytes to pcm - splitting chunk to write the rest at a later stage\n", pcm,
 			  chunk.size / ctx->channels / ctx->frame_size);
 	} else if (pcm == chunk.size / ctx->channels / ctx->frame_size) {
+		log_debug("delay frames: %d\n", delayp);
 		chunk_free_members(&chunk);
 		free(ctx->overflow);
 		ctx->overflow = NULL;
@@ -294,7 +301,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	if (tmp > PERIOD_TIME)
 		tmp = PERIOD_TIME;
 
-	unsigned int buffer_time = 4 * tmp;
+	unsigned int buffer_time = 20 * tmp;
 	snd_pcm_hw_params_set_period_time_near(ctx->pcm_handle, ctx->params, &tmp, 0);
 	snd_pcm_hw_params_set_buffer_time_near(ctx->pcm_handle, ctx->params, &buffer_time, 0);
 
@@ -325,9 +332,8 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	log_verbose("pollfd_count: %d\n", ctx->pollfd_count);
 	ctx->ufds = snap_alloc(ctx->pollfd_count * sizeof(struct pollfd));
 
-	if ((err = snd_pcm_poll_descriptors(ctx->pcm_handle, ctx->ufds, ctx->pollfd_count)) < 0) {
+	if ((err = snd_pcm_poll_descriptors(ctx->pcm_handle, ctx->ufds, ctx->pollfd_count)) < 0)
 		exit_error("Unable to obtain poll descriptors for playback: %s\n", snd_strerror(err));
-	}
 
 	snd_pcm_sw_params_alloca(&ctx->swparams);
 
@@ -336,8 +342,6 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	snd_pcm_sw_params_set_avail_min(ctx->pcm_handle, ctx->swparams, ctx->frames);
 
 	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, ctx->swparams, ctx->frames);
-	// enable period events when requested
-	//	snd_pcm_sw_params_set_period_event(ctx->pcm_handle, ctx->swparams, 1);
 
 	snd_pcm_sw_params(ctx->pcm_handle, ctx->swparams);
 	ctx->initialized = true;
