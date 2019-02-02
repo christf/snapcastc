@@ -15,12 +15,21 @@ Linux. Patches for other platforms are welcome.
 
 ### Low Latency
 
-Latency is induced by snapcast to compensate short network outages.
+* Latency is induced by snapcast to compensate short network outages. 
+* The design of snapcast (reading from an input pipe) induces significant 
+  latency. Pipes in Linux by default buffer up to 4MB of data. This is well 
+  above 23 seconds worth of audio data for 44100:16:2 format. On my machine I can 
+  see that once in a while the input pipe will not be read for multiple seconds. 
+  To compensate I am running snapcast with a very large buffer.
 
 ### Low CPU Usage
 
 While it is important for clients to run on small devices, audio quality is 
 valued above CPU utilization. The smallest target platform is Raspberry PI B.
+
+### Time Synchronisation
+
+Snapcastc assumes that system clocks are synchronized. Use ntp to achieve that.
 
 ## Usage
 See roadmap for implementation status.
@@ -32,53 +41,53 @@ Allowed options:
   -V, --version                       Show version number
   -v                                  verbose output
   -d                                  debug output
-  -p, --port arg (=1704)              Server port *
-  --controlPort arg (=1705)           Remote control port *
-  -s, --stream arg (=pipe:///tmp/snapfifo?name=default) 
-                                      URI of the PCM input stream.
-                                      Format: TYPE://host/path?name=NAME
-                                      [&codec=CODEC]
-                                      [&sampleformat=SAMPLEFORMAT]
-  --sampleformat arg (=48000:16:2)    Default sample format *
-  -c, --codec arg (=flac)             Default transport codec *
-                                      (flac|ogg|pcm)[:options]
-                                      Type codec:? to get codec specific options
-  --streamBuffer arg (=20)            Default stream read buffer [ms] *
+  -p <port>                           Server UDP port (default: 1704)
+  -P <port>                           Remote TCP control port (default: 1705)
+  -s <file>                           filename of the PCM input stream.
+  -f arg (=48000:16:2)                Sample format *
+  -c, --codec arg (=opus)             Default transport codec *
+                                      (flac*|opus*|pcm*)[:options]
+  -B <read_ms>                        Default stream read buffer [ms]
   -b, --buffer arg (=1000)            Buffer [ms]
 ```
 Options marked with (*) are not implemented yet.
 
 I am starting snapserver like this:
 ```
-snapserver -b 15000 -s 4800:16:2 -c opus
+snapcast-server -b 25000 -s /tmp/snapfifo -s 48000:16:2 -B 5 -p 1704 -c opus
 ```
 
-
-### client
+### Client
 ```
 Allowed options:
   -h --help                       produce help message
   -V, --version                   show version number
   -v                              verbose output
   -d                              debug output
-  -l, --list                      list pcm devices *
-  -s, --soundcard arg (=default)  index or name of the soundcard *
-  -e, --mstderr                   send metadata to stderr *
+  -l                              list pcm devices
+  -s,                             index or name of the soundcard
   -H, --host arg                  server hostname or ip address
   -p (=1704)                      local port
-  -P (1704)                       server port *
+  -P (=1704)                      server port
   --latency arg (=0)              latency of the soundcard *
-  -i, --instance arg (=1)         instance id *
+  -i, --instance arg (=1)         instance id
 ```
 
 Options marked with (*) are not implemented yet.
 
+I am starting the client like this:
+```
+snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default -i 12
+```
+
+
 ## Status and Roadmap
 
 * Audio Playback [Working]
-* Usage of UDP for transporting media data [Working]
-* Support for Opus [patches welcome]
-* Synchronous playback retaining audio quality, resample using libsoxr  [patches welcome]
+* Usage of UDP for transporting media data [Working, no retries yet, patches welcome]
+* Support for Opus [Working]
+* Synchronous playback by dropping / inserting single frames  [Working]
+* Synchronous playback by time stretching audio chunks using librubberband  [patches welcome]
 * Support for Snapcast android app [patches welcome]
 * implement missing command line options [patches welcome]
 
@@ -93,9 +102,11 @@ Options marked with (*) are not implemented yet.
 
 ### Dependencies
 
-    apt install libsoxr-dev libasound2-dev libopus-dev build-essential git libjson-c3-dev
+    apt install libasound2 libopus libjson-c3 librubberband2
     
 ### Build
+
+    apt install librubberband-dev libasound2-dev libopus-dev build-essential git libjson-c3-dev
 
 in the root of this project, run:
 ```
@@ -112,11 +123,9 @@ to build and install the program.
 * clients say hello to servers
 * servers maintain a list of clients that have recently checked in
 * when playing data, it is sent to each client using unicast UDP
-* every hello is replied with the current time
-* ever data packet has a sequence number
+* every data packet has a sequence number
 * when a client receives a sequence number n+1 but has not received m it will 
-  REQUEST missing packets from the server (we could also check every 100ms or 
-  missing packets)
+  REQUEST missing packets from the server
 
 
 # Collaboation
