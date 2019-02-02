@@ -91,18 +91,20 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		get_emptychunk(p);
 
 	if (ts.tv_sec) {
-		log_error("ctime: %s is_near: %d delay_alsa: %d ts: %s, tdiff: %s, tdiff sign: %d\n", print_timespec(&ctime), is_near, delay_ms_alsa, print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
+		log_error("ctime: %s is_near: %d delay_alsa: %d ts: %s, tdiff: %s, tdiff sign: %d\n", print_timespec(&ctime), is_near, delay_ms_alsa,
+			  print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
 	}
 
 	if (!is_near) {
 		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / 1000)));
 
-		// TODO: this factor already works pretty well, however we may end up in a local optimum while just playing one frame less or one frame more might be optimal.
+		// TODO: this factor already works pretty well, however we may end up in a local optimum while just playing one frame less or one
+		// frame more might be optimal.
 
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
 			log_debug("Timing is not even close, replacing chunk data with silence!\n");
-			if (tdiff.sign < 0) {  // we are way ahead, play silence
+			if (tdiff.sign > 0) {  // we are way ahead, play silence
 				memset(p->data, 0, p->size);
 				p->play_at_tv_sec = 0;
 
@@ -135,7 +137,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	pcmChunk chunk;
 
 	if (snd_pcm_delay(ctx->pcm_handle, &delayp) < 0)
-		log_error("could not obtain pcm delay\n");
+		log_verbose("could not obtain pcm delay\n");
 
 	int ret;
 
@@ -155,7 +157,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	}
 
 	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, chunk.size / chunk.channels / chunk.frame_size)) == -EPIPE) {
-		log_error("XRUN.\n");
+		log_error("Alsa buffer drained. This will be audible.\n");
 		snd_pcm_prepare(ctx->pcm_handle);
 	} else if (pcm < 0) {
 		log_error("ERROR. Can't write to PCM device. %s, snd_pcm_recover(%d)\n", snd_strerror(pcm),
@@ -169,8 +171,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		}
 		pcmchunk_shaveoff(ctx->overflow, pcm);
 
-		log_debug("----- NO ERROR ----  %d/%d bytes to pcm - splitting chunk to write the rest at a later stage\n", pcm,
-			  chunk.size / ctx->channels / ctx->frame_size);
+		log_debug("Wrote %d/%d bytes to pcm - splitting chunk to write the rest later\n", pcm, chunk.size / ctx->channels / ctx->frame_size);
 	} else if (pcm == chunk.size / ctx->channels / ctx->frame_size) {
 		log_debug("delay frames: %d\n", delayp);
 		chunk_free_members(&chunk);
