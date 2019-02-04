@@ -238,9 +238,7 @@ int min(int a, int b) {
 }
 
 bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int packet_len) {
-	// TODO: place packet in cache
-	//  start decoder for Paket
-	// TODO: change packet format, implement TLV for audio data.
+	// TODO: should TLV format be implemented for audio data? This would allow de-coupling readms and the packet size.
 
 	realloc_intercom_buffer_when_required(ctx, ntohs(packet->bufferms));
 
@@ -255,7 +253,7 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 
 	int currentoffset = CHUNK_HEADER_SIZE + sizeof(intercom_packet_audio);
 
-	memcpy(chunk.data, &((uint8_t*)packet)[currentoffset], chunk.size);
+	memcpy(chunk.data, &((uint8_t *)packet)[currentoffset], chunk.size);
 
 	if (chunk.codec == CODEC_OPUS) {
 		log_debug("Decoding opus data\n");
@@ -267,18 +265,24 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 
 	intercom_put_chunk(ctx, &chunk);
 
-
 	// initialize audio and decoder if not already done
 	// TODO: THIS DOES NOT BELONG HERE! FIND A WAY TO DO THIS IN CLIENT.C
-	if (! snapctx.opuscodec_ctx.decoder) {
+	if (!snapctx.opuscodec_ctx.decoder) {
 		snapctx.samples = chunk.samples;
 		snapctx.channels = chunk.channels;
 		snapctx.frame_size = chunk.frame_size;
 		opus_init_decoder();
 	}
 
+	size_t this_seqno = ntohl(packet->hdr.nonce);
 
-	ctx->lastreceviedseqno = ntohl(packet->hdr.nonce);
+	if ( (this_seqno - 1) != ctx->lastreceviedseqno) {
+		log_error("PACKET LOSS DETECTED. Last received audio chunk had seqno %lu, we just received %lu and thus are missing %lu packets.\n",
+			  ctx->lastreceviedseqno, this_seqno, this_seqno - ctx->lastreceviedseqno - 1 );
+		// TODO: this is where we request missing packets.
+	}
+
+	ctx->lastreceviedseqno = this_seqno;
 
 	return true;
 }
@@ -364,7 +368,7 @@ int assemble32(uint8_t *dst, uint32_t *src) {
 */
 void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
 	int chunksize = CHUNK_HEADER_SIZE + chunk->size;
- 	log_debug("sending %d Bytes of audio data\n", chunk->size);
+	log_debug("sending %d Bytes of audio data\n", chunk->size);
 	uint8_t packet[sizeof(intercom_packet_audio) + chunksize];
 
 	ssize_t packet_len;
@@ -373,7 +377,6 @@ void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
 	((intercom_packet_audio *)packet)->bufferms = htons(snapctx.bufferms);
 	packet_len += sizeof(snapctx.bufferms);
 
-
 	packet_len += assemble32(&packet[packet_len], &chunk->play_at_tv_sec);
 	packet_len += assemble32(&packet[packet_len], &chunk->play_at_tv_nsec);
 	packet_len += assemble32(&packet[packet_len], &chunk->samples);
@@ -381,7 +384,6 @@ void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
 	packet[packet_len++] = chunk->channels;
 	packet_len += assemble16(&packet[packet_len], &chunk->size);
 	packet[packet_len++] = chunk->codec;
-
 
 	memcpy(&packet[packet_len], chunk->data, chunk->size);
 	packet_len += chunk->size;
