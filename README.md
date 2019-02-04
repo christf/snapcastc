@@ -106,7 +106,7 @@ snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default -i 12
     
 ### Build
 
-    apt install librubberband-dev libasound2-dev libopus-dev build-essential git libjson-c3-dev
+    apt install librubberband-dev libasound2-dev libopus-dev build-essential git libjson-c-dev
 
 in the root of this project, run:
 ```
