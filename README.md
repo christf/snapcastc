@@ -46,7 +46,7 @@ Allowed options:
   -s <file>                           filename of the PCM input stream.
   -f arg (=48000:16:2)                Sample format *
   -c, --codec arg (=opus)             Default transport codec *
-                                      (flac*|opus*|pcm*)[:options]
+                                      (flac*|opus|pcm*)[:options]
   -B <read_ms>                        Default stream read buffer [ms]
   -b, --buffer arg (=1000)            Buffer [ms]
 ```
@@ -85,7 +85,7 @@ snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default -i 12
 
 * Audio Playback [Working]
 * Usage of UDP for transporting media data [Working, no retries yet, patches welcome]
-* Support for Opus [Working]
+* Support for Opus [Working, patches welcome for dropped frame compensation]
 * Synchronous playback by dropping / inserting single frames  [Working]
 * Synchronous playback by time stretching audio chunks using librubberband  [patches welcome]
 * Support for Snapcast android app [patches welcome]
