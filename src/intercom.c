@@ -550,7 +550,7 @@ void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
 	memcpy(&packet[packet_len], chunk->data, chunk->size);
 	packet_len += chunk->size;
 
-	print_packet(packet, packet_len);
+	// print_packet(packet, packet_len);
 
 	audio_packet ap;
 	ap.data = snap_alloc(packet_len);
