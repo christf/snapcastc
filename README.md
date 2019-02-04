@@ -149,7 +149,7 @@ This approach makes reviewing and reasoning about changes a lot easier.
 
 ## Communication
 
-Some of us are in #snapcast on freenode.
+Some of us are in #snapcastc on freenode.
 
 # Thanks!
 
