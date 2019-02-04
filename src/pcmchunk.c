@@ -22,6 +22,11 @@ void get_emptychunk(pcmChunk *ret) {
 	log_verbose("created empty chunk\n");
 }
 
+
+int chunk_getduration_ms(pcmChunk *chunk) {
+	return 1000 * chunk->size / chunk->channels / chunk->frame_size / chunk->samples;
+}
+
 bool chunk_is_empty(pcmChunk *c) { return !(c->play_at_tv_sec > 0); }
 
 void chunk_ntoh(pcmChunk *chunk) {

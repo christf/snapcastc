@@ -32,6 +32,9 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
+
+#define NOT_EVEN_CLOSE_MS 250
+
 typedef struct {
 	char *name;
 	int id;

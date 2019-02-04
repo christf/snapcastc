@@ -57,6 +57,12 @@ void adjust_speed(pcmChunk *chunk, double factor) {
 	adjust_speed_simple(chunk, factor);
 }
 
+int max(int a, int b) {
+	if (a > b)
+		return a;
+	return b;
+}
+
 int getchunk(pcmChunk *p, size_t delay_frames) {
 	double factor = 1;
 	struct timespec ctime;
@@ -64,7 +70,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	struct timespec ts = ctime;
 
 	int near_ms = 1;
-	int not_even_close_ms = 250;
+	int not_even_close_ms;
 
 	struct timespec nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
 
@@ -91,7 +97,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		get_emptychunk(p);
 
 	if (ts.tv_sec) {
-		log_error("ctime: %s is_near: %d delay_alsa: %d ts: %s, tdiff: %s, tdiff sign: %d\n", print_timespec(&ctime), is_near, delay_ms_alsa,
+		log_verbose("ctime: %s is_near: %d delay_alsa: %d ts: %s, tdiff: %s, tdiff sign: %d\n", print_timespec(&ctime), is_near, delay_ms_alsa,
 			  print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
 	}
 
@@ -101,18 +107,20 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		// TODO: this factor already works pretty well, however we may end up in a local optimum while just playing one frame less or one
 		// frame more might be optimal.
 
+		not_even_close_ms = max ( NOT_EVEN_CLOSE_MS, 2 * chunk_getduration_ms(p));
+
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
-			log_verbose("Timing is not even close, ");
+			log_error("Timing is not even close, ");
 			if (tdiff.sign < 0) {
-				log_verbose("we are ahead: replacing data with silence\n");
+				log_error("we are ahead by %s seconds: replacing data with silence\n", print_timespec(&tdiff.time));
 				memset(p->data, 0, p->size);
 				p->play_at_tv_sec = 0;
 
 				snapctx.alsaplayer_ctx.playing = false;
 				snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
 			} else {
-				log_verbose("we are behind: drop this chunk!\n");
+				log_error("we are behind by %s seconds: dropping this chunk!\n", print_timespec(&tdiff.time));
 				p->size = 0;
 				p->play_at_tv_sec = 0;
 				free(p->data);
@@ -152,9 +160,8 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	}
 
 	if (ret == 0) {
-		log_error("end of data - playing silence\n");
+		log_error("end of data\n");
 	} else if (ret == -1) {  // dropping chunk
-		log_error("DROPPING CHUNK\n");
 		return;
 	}
 
