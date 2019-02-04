@@ -114,6 +114,12 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	return 0;
 }
 
+
+void inputpipe_uninit(inputpipe_ctx *ctx) {
+	chunk_free_members(&ctx->chunk);
+	close(ctx->fd);
+}
+
 void inputpipe_init(inputpipe_ctx *ctx) {
 	uint32_t c = snapctx.samples * snapctx.channels * snapctx.frame_size * snapctx.readms / 1000;
 	ctx->chunksize = c;

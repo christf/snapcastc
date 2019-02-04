@@ -90,11 +90,19 @@ void loop() {
 			log_debug("handling event on fd %i.\n", events[i].data.fd);
 
 			if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP)) {
-				fprintf(stderr, "epoll error received on fd %i, continuing\n", events[i].data.fd);
-				perror("epoll error without contingency plan. - continuing");
-				// TODO: see which fd it was, and re-initialize the corresponding system. this will happen for example on inputpipe
-				// when the pipe is closed by a writing application
-				sig_term_handler(0, 0, 0);
+				char strbuf[512];
+				snprintf(strbuf, 512, "epoll error received on fd %i, continuing\n", events[i].data.fd);
+				perror(strbuf);
+
+				if ((snapctx.inputpipe_ctx.fd == events[i].data.fd)) { // TODO: we could send all clients a signal to stop playback in here.
+					log_verbose("input pipe was closed. This happens when mpd is exiting or playback is paused. Re-initializing input pipe.\n");
+					del_fd(efd, snapctx.inputpipe_ctx.fd);
+					inputpipe_uninit(&snapctx.inputpipe_ctx);
+					inputpipe_init(&snapctx.inputpipe_ctx);
+					add_fd(efd, snapctx.inputpipe_ctx.fd, EPOLLIN);
+				}
+				else
+					sig_term_handler(0, 0, 0);
 			} else if ((snapctx.taskqueue_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				taskqueue_run(&snapctx.taskqueue_ctx);
 			} else if ((snapctx.inputpipe_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {

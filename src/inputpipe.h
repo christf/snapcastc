@@ -53,4 +53,5 @@ typedef struct {
  * @return -1 on buffer overrun, 1 on chunk complete, 0 otherwise
  */
 int inputpipe_handle(inputpipe_ctx *ctx);
+void inputpipe_uninit(inputpipe_ctx *ctx);
 void inputpipe_init(inputpipe_ctx *ctx);
