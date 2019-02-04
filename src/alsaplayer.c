@@ -103,14 +103,16 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
-			log_debug("Timing is not even close, replacing chunk data with silence!\n");
-			if (tdiff.sign > 0) {  // we are way ahead, play silence
+			log_verbose("Timing is not even close, ");
+			if (tdiff.sign < 0) {
+				log_verbose("we are ahead: replacing data with silence\n");
 				memset(p->data, 0, p->size);
 				p->play_at_tv_sec = 0;
 
 				snapctx.alsaplayer_ctx.playing = false;
 				snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
-			} else {  // we are way behind, drop chunk to allow syncing
+			} else {
+				log_verbose("we are behind: drop this chunk!\n");
 				p->size = 0;
 				p->play_at_tv_sec = 0;
 				free(p->data);
@@ -119,7 +121,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		}
 	}
 
-	if (!chunk_is_empty(p))  // save CPU and do not resample, when chunk contains only silence
+	if (!chunk_is_empty(p))  // Do not resample, when chunk contains only silence, save some CPU
 		adjust_speed(p, factor);
 
 	// TODO adjust volume
@@ -150,7 +152,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	}
 
 	if (ret == 0) {
-		log_error("end of data\n");
+		log_error("end of data - playing silence\n");
 	} else if (ret == -1) {  // dropping chunk
 		log_error("DROPPING CHUNK\n");
 		return;
