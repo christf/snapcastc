@@ -114,7 +114,7 @@ void loop() {
 			} else {
 				char buffer[512];
 				int tmp = read(events[i].data.fd, buffer, 512);
-				log_error("  WE JUST READ %i Byte from unknown socket %i or with unknown event with content %s\n", tmp,
+				exit_error("  WE JUST READ %i Byte from unknown socket %i or with unknown event with content %s\n", tmp,
 					  events[i].data.fd, buffer);
 			}
 		}
