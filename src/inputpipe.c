@@ -39,13 +39,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// #define PIPELENGTH_S 4096 * 1024 / CHUNKSIZE / (1000 / READMS)
-
-int get_pipe_length(size_t chunksize) {
-	// default linux pipe size is 4MB
-	return (4 * 1024 * 1024) / chunksize / (1000 / snapctx.readms);
-}
-
 bool is_chunk_complete(inputpipe_ctx *ctx) { return (ctx->chunksize == ctx->data_read); }
 
 void set_idle(void *d) {
@@ -59,12 +52,10 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	struct timespec ctime;
 	obtainsystime(&ctime);
 
-	// do not over-read
-	struct timespec readuntil = timeAddMs(&ctime, snapctx.bufferms * 5 / 4);  // target 80% buffer fill-rate
-	bool buffer_full = (timespec_cmp(ctx->lastchunk, readuntil) > 0);
+	struct timespec start_playing_at = timeAddMs(&ctime, snapctx.bufferms * 9 / 10);  // target 90% buffer fill-rate to allow for some negative clock drift.
+	struct timespec bufferfull = timeAddMs(&ctime, snapctx.bufferms * 95 / 100 );
+	bool buffer_full = (timespec_cmp(ctx->lastchunk, bufferfull) > 0);
 
-	log_debug("reading chunk until %s,  lastchunk was for %s, compare result: %i\n", print_timespec(&readuntil), print_timespec(&ctx->lastchunk),
-		  timespec_cmp(ctx->lastchunk, readuntil));
 	if (buffer_full)
 		return -1;
 
@@ -78,8 +69,8 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	} else if ((count > 0) && (ctx->state == IDLE)) {
 		ctx->data_read += count;
 		ctx->state = PLAYING;
-		ctx->chunk.play_at_tv_sec = readuntil.tv_sec;
-		ctx->chunk.play_at_tv_nsec = readuntil.tv_nsec;
+		ctx->chunk.play_at_tv_sec = start_playing_at.tv_sec;
+		ctx->chunk.play_at_tv_nsec = start_playing_at.tv_nsec;
 		ctx->lastchunk.tv_sec = ctx->chunk.play_at_tv_sec;
 		ctx->lastchunk.tv_nsec = ctx->chunk.play_at_tv_nsec;
 		log_verbose("Detected status change, resyncing timestamps. This will be audible.\n", ctx->state);
@@ -87,11 +78,11 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		log_debug("read chunk that is to be played at %s, current time %s\n",
 			  print_timespec(&(struct timespec){.tv_sec = ctx->chunk.play_at_tv_sec, .tv_nsec = ctx->chunk.play_at_tv_nsec}),
 			  print_timespec(&ctime));
-		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, get_pipe_length(ctx->chunksize), 0, set_idle, NULL, &snapctx.efd);
+		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, snapctx.bufferms, snapctx.bufferms % 1000, set_idle, NULL, &snapctx.efd);
 	} else if ((count > 0) && (ctx->state == PLAYING)) {
 		log_debug("read %d Bytes from inputpipe\n", count);
 		ctx->data_read += count;
-		reschedule_task(&snapctx.taskqueue_ctx, ctx->idle_task, get_pipe_length(ctx->chunksize), 0);
+		reschedule_task(&snapctx.taskqueue_ctx, ctx->idle_task, snapctx.bufferms / 1000 , snapctx.bufferms % 1000 );
 	}
 
 	if (is_chunk_complete(ctx)) {
@@ -110,11 +101,12 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		    "%s, diff: %s\n",
 		    ctx->data_read, ctx->fname, count, ctx->state, PLAYING, IDLE, print_timespec(&play_at), print_timespec(&ctime),
 		    print_timespec(&t.time));
-// 		print_packet(ctx->chunk.data, ctx->chunk.size);
 		ctx->chunk.size = ctx->data_read;
 		ctx->chunk.frame_size = snapctx.frame_size;
 		ctx->chunk.samples = snapctx.samples;
 		ctx->chunk.channels = snapctx.channels;
+		ctx->lastchunk.tv_sec = ctx->chunk.play_at_tv_sec;
+		ctx->lastchunk.tv_nsec = ctx->chunk.play_at_tv_nsec;
 		ctx->chunk.codec = CODEC_PCM;
 		ctx->data_read = 0;
 		return 1;
@@ -123,7 +115,8 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 }
 
 void inputpipe_init(inputpipe_ctx *ctx) {
-	ctx->chunksize = snapctx.samples * snapctx.channels * snapctx.frame_size * snapctx.readms / 1000;
+	uint32_t c = snapctx.samples * snapctx.channels * snapctx.frame_size * snapctx.readms / 1000;
+	ctx->chunksize = c;
 	ctx->chunk.data = snap_alloc(ctx->chunksize);
 	ctx->chunk.size = ctx->chunksize;
 	ctx->chunk.samples = snapctx.samples;

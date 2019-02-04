@@ -42,12 +42,15 @@ typedef struct {
 	ssize_t data_read;
 	int fd;
 
-	int chunksize;
+	uint16_t chunksize;
+	uint32_t pipelength_ms;
 	struct timespec lastchunk;
 	taskqueue_t *idle_task;
 } inputpipe_ctx;
-// return -1 on buffer overrun
-// return 1 on chunk complete
-// 0 otherwise
+
+/** inputpipe_handle() will read the data from the audio pipe feeding data.
+ * @param the inputpipe context
+ * @return -1 on buffer overrun, 1 on chunk complete, 0 otherwise
+ */
 int inputpipe_handle(inputpipe_ctx *ctx);
 void inputpipe_init(inputpipe_ctx *ctx);
