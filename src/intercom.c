@@ -36,11 +36,11 @@ void free_intercom_task(void *d) {
 }
 
 void realloc_intercom_buffer_when_required(intercom_ctx *ctx, int serverbufferms) {
-	if (serverbufferms / snapctx.readms * 2 != ctx->buffer_elements) {
+	if (serverbufferms / snapctx.readms != ctx->buffer_elements) {
 		log_error("Adjusting local buffer size to %d ms\n", serverbufferms);
 		free(ctx->buffer);
 		ctx->bufferrindex = ctx->bufferwindex = 0;
-		ctx->buffer_elements = serverbufferms / snapctx.readms * 2;
+		ctx->buffer_elements = serverbufferms / snapctx.readms;
 		ctx->buffer = snap_alloc(sizeof(pcmChunk) * ctx->buffer_elements);
 		memset(ctx->buffer, 0, sizeof(pcmChunk) * ctx->buffer_elements);
 		snapctx.bufferms = serverbufferms;
@@ -244,7 +244,7 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 
 	realloc_intercom_buffer_when_required(ctx, ntohs(packet->bufferms));
 
-	uint8_t *packetpointer = &((uint8_t *)packet)[12];
+	uint8_t *packetpointer = &((uint8_t *)packet)[sizeof(intercom_packet_audio)];
 
 	pcmChunk chunk;
 	pcmChunk *pchunk = (pcmChunk *)packetpointer;
@@ -253,7 +253,7 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 	chunk_ntoh(&chunk);
 	chunk.data = snap_alloc(chunk.size);
 
-	int currentoffset = 29;
+	int currentoffset = CHUNK_HEADER_SIZE + sizeof(intercom_packet_audio);
 
 	memcpy(chunk.data, &((uint8_t*)packet)[currentoffset], chunk.size);
 
@@ -363,7 +363,7 @@ int assemble32(uint8_t *dst, uint32_t *src) {
 /** send chunk to all clients that are currently active
 */
 void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
-	int chunksize = 17 + chunk->size;
+	int chunksize = CHUNK_HEADER_SIZE + chunk->size;
  	log_debug("sending %d Bytes of audio data\n", chunk->size);
 	uint8_t packet[sizeof(intercom_packet_audio) + chunksize];
 

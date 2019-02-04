@@ -42,7 +42,7 @@ struct snapctx {
 	opuscodec_ctx opuscodec_ctx;
 
 	int efd;
-	int bufferms;
+	uint16_t bufferms;
 
 	int samples;
 	int frame_size;
