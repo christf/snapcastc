@@ -52,7 +52,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	struct timespec ctime;
 	obtainsystime(&ctime);
 
-	struct timespec start_playing_at = timeAddMs(&ctime, snapctx.bufferms * 9 / 10);  // target 90% buffer fill-rate to allow for some negative clock drift.
+	struct timespec start_playing_at = timeAddMs(&ctime, 100);
 	struct timespec bufferfull = timeAddMs(&ctime, snapctx.bufferms * 95 / 100 );
 	bool buffer_full = (timespec_cmp(ctx->lastchunk, bufferfull) > 0);
 
