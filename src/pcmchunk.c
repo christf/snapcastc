@@ -19,7 +19,7 @@ void get_emptychunk(pcmChunk *ret) {
 	ret->data = snap_alloc(ret->size);
 	ret->codec = CODEC_PCM;
 	memset(ret->data, 0, ret->size);
-	log_verbose("created empty chunk\n");
+	log_debug("created empty chunk with size %d\n", ret->size);
 }
 
 
