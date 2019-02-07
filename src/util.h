@@ -1,4 +1,6 @@
 #pragma once
+#include "pcmchunk.h"
+
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -14,3 +16,5 @@ void print_packet(unsigned char *buf, int size);
 
 void add_fd(int efd, int fd, uint32_t events);
 void del_fd(int efd, int fd);
+const char* print_chunk(pcmChunk *chunk);
+
