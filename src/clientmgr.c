@@ -2,6 +2,8 @@
 #include "alloc.h"
 #include "snapcast.h"
 #include "util.h"
+#include "intercom.h"
+
 
 #include <netdb.h>
 #include <string.h>
@@ -114,13 +116,20 @@ bool clientmgr_refresh_client(struct client *client) {
 
 	if (!existingclient) {
 		// create new client
-		log_verbose("clientmgr: creating client: %u\n", client->id);
+		log_verbose("clientmgr: creating client: %lu\n", client->id);
 		client_t n_client = {};
 		new_client(&n_client, client->id, &client->ip, client->port);
 		existingclient = get_client(client->id);
+
+		// TODO: send intercom buffer to this cli ent
+		for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
+			log_debug("sending packet %d\n",i);
+			audio_packet *ap = &VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, i);
+			intercom_send_packet_unicast(&snapctx.intercom_ctx, &existingclient->ip, ap->data, ap->len, existingclient->port);
+		}
 	}
 
-	log_verbose("clientmgr: refreshing client: %u\n", client->id);
+	log_verbose("clientmgr: refreshing client: %lu\n", client->id);
 	print_client(existingclient);
 	reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);
 

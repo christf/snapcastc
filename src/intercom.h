@@ -111,7 +111,7 @@ typedef struct {
 
 void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk);
 void intercom_recently_seen_add(intercom_ctx *ctx, intercom_packet_hdr *hdr);
-void intercom_send_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_len);
+bool intercom_send_packet_unicast(intercom_ctx *ctx, const struct in6_addr *recipient, uint8_t *packet, ssize_t packet_len, int port);
 void intercom_seek(intercom_ctx *ctx, const struct in6_addr *address);
 void intercom_init_unicast(intercom_ctx *ctx);
 void intercom_init(intercom_ctx *ctx);
