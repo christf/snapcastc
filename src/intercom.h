@@ -32,6 +32,12 @@ typedef struct __attribute__((__packed__)) {
 typedef struct __attribute__((__packed__)) {
 	uint8_t type;
 	uint8_t length;
+	uint32_t nonce;
+} tlv_request;
+
+typedef struct __attribute__((__packed__)) {
+	uint8_t type;
+	uint8_t length;
 	uint32_t node_id;
 } tlv_hello;
 
@@ -58,13 +64,6 @@ typedef struct __attribute__((__packed__)) {
 
 typedef VECTOR(client_t) client_v;
 
-typedef struct __attribute__((__packed__)) {
-	uint8_t type;
-	uint8_t length;
-	uint16_t empty;
-	// 	uint32_t seqno;
-} intercom_packet_tlv;
-
 struct intercom_task {
 	uint16_t packet_len;
 	uint8_t *packet;
@@ -73,10 +72,24 @@ struct intercom_task {
 	uint8_t retries_left;
 };
 
+
+typedef struct {
+	uint8_t *data;
+	uint16_t len;
+	uint32_t nonce;
+} audio_packet;
+
+struct buffer_cleanup_task {
+	audio_packet ap;
+};
+
+
 typedef struct {
 	struct in6_addr serverip;
 	struct snaptx *snapctx;
 	VECTOR(intercom_packet_hdr) recent_packets;
+	VECTOR(audio_packet) missing_packets;
+	VECTOR(audio_packet) packet_buffer;
 	int fd;
 	uint16_t port;
 	int16_t controlport;
@@ -89,7 +102,7 @@ typedef struct {
 	size_t buffer_elements;
 	size_t bufferrindex;
 	size_t lastreceviedseqno;
-	void *buffer;
+	pcmChunk *buffer;
 
 } intercom_ctx;
 
@@ -103,4 +116,5 @@ void intercom_handle_in(intercom_ctx *ctx, int fd);
 bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int port);
 struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx);
 
+bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret);
 void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *c);
