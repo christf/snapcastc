@@ -17,8 +17,7 @@ Linux. Patches for other platforms are welcome.
 
 * Latency is induced by snapcast to compensate short network outages. 
 * The design of snapcast (reading from an input pipe) induces significant 
-  latency. Pipes in Linux by default buffer up to 4MB of data. This is well 
-  above 23 seconds worth of audio data for 44100:16:2 format. On my machine I can 
+  latency. Pipes in Linux by default buffer up to 64KB of data. On my machine I can 
   see that once in a while the input pipe will not be read for multiple seconds. 
   To compensate I am running snapcast with a very large buffer.
 
@@ -33,6 +32,34 @@ Snapcastc assumes that system clocks are synchronized. Use ntp to achieve that.
 
 ## Usage
 See roadmap for implementation status.
+
+## Configuring MPD -- use the pipe plugin
+
+MPD has two output plugins that can potentially be used: pipe and fifo.
+The fifo plugin will never block mpd at the expense of dropping audio data when 
+the fifo is full. This is 64KB on a Linux > 2.6.11
+When the server is under significant IO load, this will lead to dropped audio.
+
+The pipe plugin makes the choice the other way around: It will not drop audio 
+data but it will block playback in mpd when data cannot be processed. As long 
+as blocking does not take longer than the configured buffer of snapcast, it 
+will not be audible.
+
+If you are using the fifo output plugin from mpd and playback stops on all 
+clients simultaneously after they have been playing for more than 
+30 minutes, then consider switching to the following mpd configuration in 
+mpd.conf. Also, make sure that the snapfifo is created using mkfifo and 
+snapcastc as well as mpd have permission to access it.
+
+```
+Audio_output {
+        Type            "pipe"
+        Name            "snapcast"
+        Command         "cat >/tmp/snapfifo"
+        Format          "48000:16:2"
+        Auto_resample   "no"
+}
+```
 
 ### server
 ```
