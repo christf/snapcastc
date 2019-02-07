@@ -104,7 +104,7 @@ void loop() {
 					intercom_handle_in(&snapctx.intercom_ctx, fds[i].fd);
 
 					if (!snapctx.alsaplayer_ctx.initialized) {
-						log_error("initializing alsa\n");
+						log_verbose("initializing alsa\n");
 						alsaplayer_init(&snapctx.alsaplayer_ctx);
 						init_alsafd(&snapctx.alsaplayer_ctx);
 					}

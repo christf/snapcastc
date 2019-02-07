@@ -5,6 +5,9 @@
 #include <sys/time.h>
 
 
+// CHUNK_HEADER_SIZE defines the offset at which data will be written in a AUDIO packet
+#define CHUNK_HEADER_SIZE 17
+
 enum { CODEC_PCM = 0, CODEC_OPUS  = 1};
 
 typedef struct  {

@@ -63,6 +63,15 @@ int max(int a, int b) {
 	return b;
 }
 
+void decode_first_input(void *d) {
+	pcmChunk *p;
+	intercom_peeknextaudiochunk(&snapctx.intercom_ctx, &p);
+	if (p->codec == CODEC_OPUS) {
+		log_verbose("Decoding opus data for chunk that is to be played next.\n");
+		decode_opus_handle(p);
+	}
+}
+
 int getchunk(pcmChunk *p, size_t delay_frames) {
 	double factor = 1;
 	struct timespec ctime;
@@ -79,6 +88,8 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	ts = timeAddMs(&ts, delay_ms_alsa);
 
 	timediff tdiff = timeSub(&ts, &nextchunk_playat);
+	// log_debug("ctime: %s nextchunk playat: %s, difference: %s\n", print_timespec(&ctime), print_timespec(&nextchunk_playat),
+	// print_timespec(&tdiff.time));
 
 	bool is_near = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < near_ms * 1000000L);
 	if (snapctx.alsaplayer_ctx.playing || ((!snapctx.alsaplayer_ctx.playing) && tdiff.sign > 0) || is_near) {
@@ -92,13 +103,19 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
 			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
 					(int)(1.2 * snapctx.bufferms) % 1000);
+
+			if (p->codec == CODEC_OPUS) {
+				log_error("Decoding opus data for chunk in getchunk(), this should only happen rarely.\n");
+				decode_opus_handle(p);
+			}
+			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
 		}
 	} else
 		get_emptychunk(p);
 
 	if (ts.tv_sec) {
-		log_verbose("ctime: %s is_near: %d delay_alsa: %d ts: %s, tdiff: %s, tdiff sign: %d\n", print_timespec(&ctime), is_near, delay_ms_alsa,
-			  print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
+		log_verbose("ctime: %s is_near: %d delay_alsa: %d ts: %s, tdiff: %s, tdiff sign: %d\n", print_timespec(&ctime), is_near,
+			    delay_ms_alsa, print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
 	}
 
 	if (!is_near) {
@@ -107,7 +124,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		// TODO: this factor already works pretty well, however we may end up in a local optimum while just playing one frame less or one
 		// frame more might be optimal.
 
-		not_even_close_ms = max ( NOT_EVEN_CLOSE_MS, 2 * chunk_getduration_ms(p));
+		not_even_close_ms = max(NOT_EVEN_CLOSE_MS, 2 * chunk_getduration_ms(p));
 
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
@@ -120,11 +137,15 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 				snapctx.alsaplayer_ctx.playing = false;
 				snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
 			} else {
-				log_error("we are behind by %s seconds: dropping this chunk!\n", print_timespec(&tdiff.time));
-				p->size = 0;
-				p->play_at_tv_sec = 0;
-				free(p->data);
-				return -1;
+				if (p->play_at_tv_sec > 0) {
+					log_error("we are behind by %s seconds: dropping this chunk!\n", print_timespec(&tdiff.time));
+					p->size = 0;
+					p->play_at_tv_sec = 0;
+					free(p->data);
+					return -1;
+				} else {
+					log_error(" playing empty chunk\n");
+				}
 			}
 		}
 	}
@@ -183,7 +204,9 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		log_debug("Wrote %d/%d bytes to pcm - splitting chunk to write the rest later\n", pcm, chunk.size / ctx->channels / ctx->frame_size);
 	} else if (pcm == chunk.size / ctx->channels / ctx->frame_size) {
 		log_debug("delay frames: %d\n", delayp);
-		chunk_free_members(&chunk);
+		if (chunk.size) {
+			chunk_free_members(&chunk);
+		}
 		free(ctx->overflow);
 		ctx->overflow = NULL;
 	}

@@ -11,27 +11,39 @@
 #define MAX_FRAMES (snapctx.samples * 12 / 100)
 
 void decode_opus_handle(pcmChunk *chunk) {
+	// The initialization really should happen somewhere else...
+	if (!snapctx.opuscodec_ctx.decoder) {
+		log_error("initializing opus codec\n");
+		snapctx.samples = chunk->samples;
+		snapctx.channels = chunk->channels;
+		snapctx.frame_size = chunk->frame_size;
+		opus_init_decoder();
+	}
+
 	struct timespec ctime;
 	if (snapctx.debug) {
 		obtainsystime(&ctime);
 		log_debug("starting decoder at %s\n", print_timespec(&ctime));
 	}
 
-	uint8_t
-	    *out[MAX_FRAMES * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size];  // maximum for opus chunk: 60ms data at 48000:2:2
+	uint8_t *out[MAX_FRAMES * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size];
 	int frames = opus_decode(snapctx.opuscodec_ctx.decoder, chunk->data, chunk->size, (opus_int16 *)out, MAX_FRAMES, 0);
-	if (frames < 0) {
-		log_error("decoder failed: %s\n", opus_strerror(frames));
-		memset(chunk->data, 0, chunk->size);
-		return;
-	}
+	if (frames <= 0) {
+		pcmChunk empty;
+		get_emptychunk(&empty);
 
-	uint8_t *dout = snap_alloc(frames * chunk->channels * chunk->frame_size);
-	free(chunk->data);
-	chunk->data = dout;
-	chunk->size = frames * chunk->channels * chunk->frame_size;
-	chunk->codec = CODEC_PCM;
-	memcpy(dout, out, chunk->size);
+		log_error("decoder failed: %s\n", opus_strerror(frames));
+		chunk->data = empty.data;
+		chunk->size = empty.size;
+		chunk->codec = CODEC_PCM;
+	} else {
+		uint8_t *dout = snap_alloc(frames * chunk->channels * chunk->frame_size);
+		free(chunk->data);
+		chunk->data = dout;
+		chunk->size = frames * chunk->channels * chunk->frame_size;
+		chunk->codec = CODEC_PCM;
+		memcpy(dout, out, chunk->size);
+	}
 
 	if (snapctx.debug) {
 		obtainsystime(&ctime);
