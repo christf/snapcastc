@@ -3,7 +3,7 @@
 #include <time.h>
 #include "util.h"
 
-#define BILLION 1000000000l
+#define BILLION 1000000000UL
 
 struct timespec timeAdd(struct timespec *t1, struct timespec *t2) {
 	long sec = t2->tv_sec + t1->tv_sec;
