@@ -72,11 +72,11 @@ void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t id) {
 	struct client *client = get_client(id);
 
 	if (client == NULL) {
-		log_debug("Client [%d] unknown: cannot delete\n", id);
+		log_debug("Client [%lu] unknown: cannot delete\n", id);
 		return;
 	}
 
-	log_verbose("\033[34mREMOVING client %d\033[0m\n", id);
+	log_verbose("\033[34mREMOVING client %lu\033[0m\n", id);
 	print_client(client);
 
 	free_client_members(client);
@@ -90,7 +90,7 @@ void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t id) {
 	}
 }
 
-/** Remove all client routes - used when exiting l3roamd
+/** Remove all client routes - used when exiting
 ** **/
 void clientmgr_purge_clients(clientmgr_ctx *ctx) {
 	struct client *client;
