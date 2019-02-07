@@ -39,4 +39,5 @@ void print_client(struct client *client);
 bool clientmgr_refresh_client(struct client *client);
 void clientmgr_purge_clients(clientmgr_ctx *ctx);
 void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t clientid);
+void clientmgr_stop_clients();
 void clientmgr_init();

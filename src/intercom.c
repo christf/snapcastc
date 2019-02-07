@@ -104,6 +104,17 @@ int cmp_audiopacket(const audio_packet *ap1, const audio_packet *ap2) {
 	return 0;
 }
 
+int parse_op(uint8_t *packet, uint8_t *op) {
+	packet[1] = 2;
+	return 2;
+}
+
+int assemble_op(uint8_t *packet, uint32_t nonce, uint8_t op) {
+	packet[0] = op;
+	packet[1] = 2;
+	return packet[1];
+}
+
 int assemble_request(uint8_t *packet, uint32_t nonce) {
 	packet[0] = REQUEST;
 	packet[1] = 6;
@@ -211,7 +222,37 @@ bool intercom_handle_client_operation(intercom_ctx *ctx, intercom_packet_op *pac
 	return true;
 }
 
-bool intercom_handle_server_operation(intercom_ctx *ctx, intercom_packet_sop *packet, int packet_len) { return true; }
+bool intercom_handle_server_operation(intercom_ctx *ctx, intercom_packet_sop *packet, int packet_len) {
+	int currentoffset = sizeof(intercom_packet_hdr);
+	uint8_t type, *packetpointer;
+
+	while (currentoffset < packet_len) {
+		packetpointer = &((uint8_t *)packet)[currentoffset];
+		type = *packetpointer;
+		log_debug("offset: %i %p %p\n", currentoffset, packet, packetpointer);
+		switch (type) {
+			case CLIENT_STOP:
+				currentoffset += parse_op(packetpointer, NULL);
+				pcmChunk p;
+				while (ctx->bufferrindex < ctx->bufferwindex) {
+					intercom_getnextaudiochunk(ctx, &p);
+				}
+
+				while (VECTOR_LEN(snapctx.intercom_ctx.missing_packets)) {
+					VECTOR_DELETE(snapctx.intercom_ctx.missing_packets, 0);
+				}
+				memset(ctx->buffer, 0, sizeof(pcmChunk) * ctx->buffer_elements);
+				snapctx.intercom_ctx.lastreceviedseqno = 0;
+				// TODO: should we stop alsa here?
+				break;
+			default:
+				log_error("unknown segment of type %i found in client operation packet. Ignoring this piece\n", type);
+				currentoffset += packetpointer[2];
+				break;
+		}
+	}
+	return true;
+}
 
 struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx) {
 	struct timespec ret = {};
@@ -308,16 +349,16 @@ void intercom_put_chunk(intercom_ctx *ctx, pcmChunk *chunk) {
 	bufferwindex_increment(ctx);
 }
 
-void remove_request(uint32_t nonce) {
+bool remove_request(uint32_t nonce) {
 	audio_packet key = {.nonce = nonce};
 	audio_packet *ap = VECTOR_LSEARCH(&key, snapctx.intercom_ctx.missing_packets, cmp_audiopacket);
 
-	int i = VECTOR_GETINDEX(snapctx.intercom_ctx.missing_packets, ap);
-	log_debug("Processing out of order audio with seqno: %lu index is %d\n", nonce, i);
-
 	if (ap) {
+		int i = VECTOR_GETINDEX(snapctx.intercom_ctx.missing_packets, ap);
 		VECTOR_DELETE(snapctx.intercom_ctx.missing_packets, i);
+		return true;
 	}
+	return false;
 }
 
 uint32_t get_nonce_from_packet(uint8_t *packet) {
@@ -432,8 +473,10 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 		intercom_put_chunk(ctx, &chunk);
 		ctx->lastreceviedseqno = this_seqno;
 	} else {
-		remove_request(this_seqno);
-		intercom_put_chunk_locate(ctx, &chunk);
+		if (remove_request(this_seqno)) {
+			log_error("Processing out of order audio with seqno: %lu\n", this_seqno);
+			intercom_put_chunk_locate(ctx, &chunk);
+		}
 	}
 
 	return true;
@@ -586,6 +629,16 @@ void hello_task(void *d) {
 
 void schedule_hellos(struct intercom_task *data, const int s_timeout, const int ms_timeout, void (*processor)(void *data)) {
 	data->check_task = post_task(&snapctx.taskqueue_ctx, s_timeout, ms_timeout, processor, NULL, data);
+}
+
+bool intercom_stop_client(intercom_ctx *ctx, const struct in6_addr *recipient, int port) {
+	int packet_len = 0;
+	uint8_t *packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_op));
+
+	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION);
+	packet_len += assemble_op(&packet[packet_len], get_nonce(), CLIENT_STOP);
+
+	intercom_send_packet_unicast(&snapctx.intercom_ctx, recipient, packet, packet_len, snapctx.intercom_ctx.serverport);
 }
 
 bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int port) {

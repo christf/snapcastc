@@ -21,6 +21,14 @@ struct client *findinvector(void *_vector, const uint32_t id) {
 	return NULL;
 }
 
+void clientmgr_stop_clients() {
+	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
+		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
+		intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
+	}
+}
+
+
 void schedule_delete_client(void *d) {
 	uint32_t *id = d;
 	clientmgr_delete_client(&snapctx.clientmgr_ctx, *id);

@@ -116,6 +116,12 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 
 
 void inputpipe_uninit(inputpipe_ctx *ctx) {
+	if (ctx->idle_task)
+		taskqueue_remove(ctx->idle_task);
+	ctx->idle_task = NULL;
+	ctx->data_read = 0;
+	ctx->state = IDLE;
+
 	chunk_free_members(&ctx->chunk);
 	close(ctx->fd);
 }
