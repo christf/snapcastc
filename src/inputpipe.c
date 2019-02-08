@@ -42,10 +42,11 @@
 bool is_chunk_complete(inputpipe_ctx *ctx) { return (ctx->chunksize == ctx->data_read); }
 
 void set_idle(void *d) {
+	inputpipe_ctx *ctx = (inputpipe_ctx*)d;
 	log_verbose("INPUT_UNDERRUN... this will be audible.\n");
-	snapctx.inputpipe_ctx.state = IDLE;
-	snapctx.inputpipe_ctx.idle_task = NULL;
-	snapctx.inputpipe_ctx.data_read = 0;
+	ctx->state = IDLE;
+	ctx->idle_task = NULL;
+	ctx->data_read = 0;
 }
 
 int inputpipe_handle(inputpipe_ctx *ctx) {
@@ -78,7 +79,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		log_debug("read chunk that is to be played at %s, current time %s\n",
 			  print_timespec(&(struct timespec){.tv_sec = ctx->chunk.play_at_tv_sec, .tv_nsec = ctx->chunk.play_at_tv_nsec}),
 			  print_timespec(&ctime));
-		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, snapctx.bufferms, snapctx.bufferms % 1000, set_idle, NULL, &snapctx.efd);
+		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, snapctx.bufferms, snapctx.bufferms % 1000, set_idle, NULL, ctx);
 	} else if ((count > 0) && (ctx->state == PLAYING)) {
 		log_debug("read %d Bytes from inputpipe\n", count);
 		ctx->data_read += count;
@@ -118,9 +119,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 void inputpipe_uninit(inputpipe_ctx *ctx) {
 	if (ctx->idle_task)
 		taskqueue_remove(ctx->idle_task);
-	ctx->idle_task = NULL;
-	ctx->data_read = 0;
-	ctx->state = IDLE;
+	set_idle(ctx);
 
 	chunk_free_members(&ctx->chunk);
 	close(ctx->fd);
