@@ -23,6 +23,7 @@
 #include "intercom.h"
 #include "taskqueue.h"
 #include "opuscodec.h"
+#include "socket.h"
 #include "types.h"
 
 #include <stddef.h>
@@ -40,6 +41,7 @@ struct snapctx {
 	clientmgr_ctx clientmgr_ctx;
 	intercom_ctx intercom_ctx;
 	opuscodec_ctx opuscodec_ctx;
+	socket_ctx socket_ctx;
 
 	int efd;
 	uint16_t bufferms;
@@ -49,6 +51,8 @@ struct snapctx {
 	int channels;
 
 	size_t readms;
+
+	uint16_t socketport;
 
 	bool debug;
 	bool verbose;

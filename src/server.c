@@ -27,12 +27,13 @@
 #include "alloc.h"
 #include "error.h"
 #include "inputpipe.h"
+#include "opuscodec.h"
 #include "snapcast.h"
+#include "socket.h"
 #include "types.h"
 #include "util.h"
 #include "vector.h"
 #include "version.h"
-#include "opuscodec.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -80,6 +81,7 @@ void loop() {
 	add_fd(efd, snapctx.taskqueue_ctx.fd, EPOLLIN);
 	add_fd(efd, snapctx.inputpipe_ctx.fd, EPOLLIN);
 	add_fd(efd, snapctx.intercom_ctx.fd, EPOLLIN);
+	add_fd(efd, snapctx.socket_ctx.fd, EPOLLIN);
 
 	events = snap_alloc0_array(maxevents, sizeof(struct epoll_event));
 	log_verbose("starting loop\n");
@@ -94,8 +96,8 @@ void loop() {
 				snprintf(strbuf, 512, "epoll error received on fd %i, continuing\n", events[i].data.fd);
 				perror(strbuf);
 
-				if ((snapctx.inputpipe_ctx.fd == events[i].data.fd)) { // TODO: we could send all clients a signal to stop playback in here.
-					log_error("input pipe was closed. This happens when mpd is exiting or playback is paused. Re-initializing input pipe.\n");
+				if ((snapctx.inputpipe_ctx.fd == events[i].data.fd)) {
+					log_error("input pipe was closed (mpd stopped?). Re-initializing-.\n");
 					del_fd(efd, snapctx.inputpipe_ctx.fd);
 					inputpipe_uninit(&snapctx.inputpipe_ctx);
 
@@ -103,8 +105,7 @@ void loop() {
 
 					inputpipe_init(&snapctx.inputpipe_ctx);
 					add_fd(efd, snapctx.inputpipe_ctx.fd, EPOLLIN);
-				}
-				else
+				} else
 					sig_term_handler(0, 0, 0);
 			} else if ((snapctx.taskqueue_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				taskqueue_run(&snapctx.taskqueue_ctx);
@@ -122,12 +123,32 @@ void loop() {
 				}
 			} else if ((snapctx.intercom_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				intercom_handle_in(&snapctx.intercom_ctx, events[i].data.fd);
+			} else if ((snapctx.socket_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
+				int cfd = socket_handle_in(&snapctx.socket_ctx);
+				add_fd(efd, cfd, EPOLLIN);
+			} else if (socket_get_client(&snapctx.socket_ctx, NULL, events[i].data.fd) && (events[i].events & EPOLLIN)) {
+				socketclient *sc = NULL;
+				socket_get_client(&snapctx.socket_ctx, &sc, events[i].data.fd);
+				if (socket_handle_client(&snapctx.socket_ctx, sc) < 0) {
+					log_error("closing client: %d\n", sc->fd);
+					del_fd(efd, sc->fd);
+					socket_client_remove(&snapctx.socket_ctx, sc);
+				}
 			} else {
-				char buffer[512];
-				int tmp = read(events[i].data.fd, buffer, 512);
-				exit_error("  WE JUST READ %i Byte from unknown socket %i or with unknown event with content %s\n", tmp,
-					  events[i].data.fd, buffer);
+				if (events[i].events == EPOLLIN) {
+					char buffer[512];
+					int tmp = read(events[i].data.fd, buffer, 512);
+					if (tmp < 0)
+						perror("read:");
+					else
+						log_error("  WE JUST READ %i Byte from unknown socket %i or with unknown event with content %s\n",
+							  tmp, events[i].data.fd, buffer);
+					break;
+				}
+				log_error("event is not EPOLLIN but still from an unknown fd. - This likely is a bug.\n");
 			}
+			log_error("iteration %d of %d on fd %d\n", i, n, events[i].data.fd);
+			events[i].events = 0;  // clear events for next iteration
 		}
 	}
 
@@ -150,6 +171,7 @@ void catch_sigterm() {
 }
 
 int main(int argc, char *argv[]) {
+	bool input = false;
 	snapctx.verbose = false;
 	snapctx.debug = false;
 
@@ -157,16 +179,17 @@ int main(int argc, char *argv[]) {
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
 	snapctx.intercom_ctx.serverport = INTERCOM_PORT;
 
-	snapctx.samples = 48000;  // set default
-	snapctx.frame_size = 2;   // set default
-	snapctx.channels = 2;     // set default
-	snapctx.readms = 5;       // set default
-	snapctx.opuscodec_ctx.bitrate = 96000;       // set default
+	snapctx.samples = 48000;		// set default
+	snapctx.frame_size = 2;			// set default
+	snapctx.channels = 2;			// set default
+	snapctx.readms = 5;			// set default
+	snapctx.opuscodec_ctx.bitrate = 96000;  // set default
+	snapctx.socketport = 1705;
 
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
 	int c;
-	while ((c = getopt_long(argc, argv, "Vvdh:B:s:b:p:f:", long_options, &option_index)) != -1) switch (c) {
+	while ((c = getopt_long(argc, argv, "Vvdh:B:s:b:p:f:P:", long_options, &option_index)) != -1) switch (c) {
 			case 'V':
 				printf("snapclient %s\n", SOURCE_VERSION);
 #if defined(GIT_BRANCH) && defined(GIT_COMMIT_HASH)
@@ -183,6 +206,9 @@ int main(int argc, char *argv[]) {
 			//				snapctx.samples
 			//				snapctx.channels
 			//				snapctx.frame_size
+			case 'P':
+				snapctx.socketport = atoi(optarg);
+				break;
 			case 'p':
 				snapctx.intercom_ctx.port = atoi(optarg);
 				break;
@@ -193,7 +219,9 @@ int main(int argc, char *argv[]) {
 				snapctx.bufferms = atoi(optarg);
 				break;
 			case 's':
+				input = true;
 				snapctx.inputpipe_ctx.fname = strdupa(optarg);
+				inputpipe_init(&snapctx.inputpipe_ctx);
 				break;
 			case 'h':
 			default:
@@ -204,13 +232,18 @@ int main(int argc, char *argv[]) {
 
 	catch_sigterm();
 	taskqueue_init(&snapctx.taskqueue_ctx);
-	if (snapctx.inputpipe_ctx.fname)
-		inputpipe_init(&snapctx.inputpipe_ctx);
+
+	if (!input)
+		exit_error("-s must be specified at least once\n");
 
 	opus_init_encoder(snapctx.intercom_ctx.mtu - IPOVERHEAD_BYTES - sizeof(intercom_packet_hdr) - PCMCHUNK_HEADER_SIZE - UDPOVERHEAD_BYTES);
 	clientmgr_init(&snapctx.clientmgr_ctx);
 
 	intercom_init(&snapctx.intercom_ctx);
+
+	snapctx.socket_ctx.port = snapctx.socketport;
+	socket_init(&snapctx.socket_ctx);
+
 	loop();
 
 	return 0;

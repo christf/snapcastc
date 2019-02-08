@@ -1,11 +1,11 @@
 #include "intercom.h"
 #include "alloc.h"
+#include "alsaplayer.h"
 #include "error.h"
 #include "snapcast.h"
 #include "syscallwrappers.h"
 #include "timespec.h"
 #include "util.h"
-#include "alsaplayer.h"
 
 #include "clientmgr.h"
 #include "pcmchunk.h"
@@ -123,7 +123,6 @@ int assemble_request(uint8_t *packet, uint32_t nonce) {
 	memcpy(&packet[2], &id, sizeof(uint32_t));
 	return packet[1];
 }
-
 
 int assemble_hello(uint8_t *packet) {
 	packet[0] = HELLO;
@@ -669,4 +668,3 @@ bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int por
 	data->check_task = post_task(&snapctx.taskqueue_ctx, 0, 0, hello_task, NULL, data);
 	return true;
 }
-

@@ -1,9 +1,9 @@
 #include "clientmgr.h"
 #include "alloc.h"
-#include "snapcast.h"
-#include "util.h"
 #include "intercom.h"
-
+#include "snapcast.h"
+#include "syscallwrappers.h"
+#include "util.h"
 
 #include <netdb.h>
 #include <string.h>
@@ -29,7 +29,6 @@ void clientmgr_stop_clients() {
 		intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
 	}
 }
-
 
 void schedule_delete_client(void *d) {
 	uint32_t *id = d;
@@ -113,6 +112,8 @@ void clientmgr_purge_clients(clientmgr_ctx *ctx) {
 
 bool clientmgr_refresh_client(struct client *client) {
 	client_t *existingclient = get_client(client->id);
+	struct timespec ctime;
+	obtainsystime(&ctime);
 
 	if (!existingclient) {
 		// create new client
@@ -121,14 +122,22 @@ bool clientmgr_refresh_client(struct client *client) {
 		new_client(&n_client, client->id, &client->ip, client->port);
 		existingclient = get_client(client->id);
 
-		// TODO: send intercom buffer to this cli ent
 		for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
-			log_debug("sending packet %d\n",i);
+			log_debug("sending packet %d\n", i);
 			audio_packet *ap = &VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, i);
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, &existingclient->ip, ap->data, ap->len, existingclient->port);
 		}
+
+		existingclient->protoversion = 2;  // For some reason we have protoversion 2 for clients now.
+
+		// TODO: remove this hack and use actual mac address
+		existingclient->mac[0] = 0xff;
+		existingclient->mac[1] = 0xff;
+		memcpy(&existingclient->mac[2], &client->id, 4);
 	}
 
+	existingclient->connected = true;
+	existingclient->lastseen = ctime;
 	log_verbose("clientmgr: refreshing client: %lu\n", client->id);
 	print_client(existingclient);
 	reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);
