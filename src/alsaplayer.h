@@ -33,7 +33,7 @@
 #include <sys/types.h>
 
 
-#define NOT_EVEN_CLOSE_MS 250
+#define NOT_EVEN_CLOSE_MS 30
 
 typedef struct {
 	char *name;

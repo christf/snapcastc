@@ -123,7 +123,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		// TODO: this factor already works pretty well, however we may end up in a local optimum while just playing one frame less or one
 		// frame more might be optimal.
 
-		not_even_close_ms = max(NOT_EVEN_CLOSE_MS, 2 * chunk_getduration_ms(p));
+		not_even_close_ms = max(NOT_EVEN_CLOSE_MS, chunk_getduration_ms(p) / 2);
 
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
