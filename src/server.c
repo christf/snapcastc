@@ -95,9 +95,12 @@ void loop() {
 				perror(strbuf);
 
 				if ((snapctx.inputpipe_ctx.fd == events[i].data.fd)) { // TODO: we could send all clients a signal to stop playback in here.
-					log_verbose("input pipe was closed. This happens when mpd is exiting or playback is paused. Re-initializing input pipe.\n");
+					log_error("input pipe was closed. This happens when mpd is exiting or playback is paused. Re-initializing input pipe.\n");
 					del_fd(efd, snapctx.inputpipe_ctx.fd);
 					inputpipe_uninit(&snapctx.inputpipe_ctx);
+
+					clientmgr_stop_clients();
+
 					inputpipe_init(&snapctx.inputpipe_ctx);
 					add_fd(efd, snapctx.inputpipe_ctx.fd, EPOLLIN);
 				}

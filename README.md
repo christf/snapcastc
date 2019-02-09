@@ -81,7 +81,7 @@ Options marked with (*) are not implemented yet.
 
 I am starting snapserver like this:
 ```
-snapcast-server -b 25000 -s /tmp/snapfifo -s 48000:16:2 -B 5 -p 1704 -c opus
+snapcast-server -b 25000 -s /tmp/snapfifo -f 48000:16:2 -B 120 -p 1704
 ```
 
 ### Client
@@ -104,15 +104,15 @@ Options marked with (*) are not implemented yet.
 
 I am starting the client like this:
 ```
-snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default -i 12
+snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default
 ```
 
 
 ## Status and Roadmap
 
 * Audio Playback [Working]
-* Usage of UDP for transporting media data [Working, no retries yet, patches welcome]
-* Support for Opus [Working, patches welcome for dropped frame compensation]
+* Usage of UDP for transporting media data [Working]
+* Support for Opus [Working]
 * Synchronous playback by dropping / inserting single frames  [Working]
 * Synchronous playback by time stretching audio chunks using librubberband  [patches welcome]
 * Support for Snapcast android app [patches welcome]

@@ -2,6 +2,8 @@
 #include "alloc.h"
 #include "snapcast.h"
 #include "util.h"
+#include "intercom.h"
+
 
 #include <netdb.h>
 #include <string.h>
@@ -20,6 +22,14 @@ struct client *findinvector(void *_vector, const uint32_t id) {
 
 	return NULL;
 }
+
+void clientmgr_stop_clients() {
+	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
+		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
+		intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
+	}
+}
+
 
 void schedule_delete_client(void *d) {
 	uint32_t *id = d;
@@ -72,11 +82,11 @@ void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t id) {
 	struct client *client = get_client(id);
 
 	if (client == NULL) {
-		log_debug("Client [%d] unknown: cannot delete\n", id);
+		log_debug("Client [%lu] unknown: cannot delete\n", id);
 		return;
 	}
 
-	log_verbose("\033[34mREMOVING client %d\033[0m\n", id);
+	log_verbose("\033[34mREMOVING client %lu\033[0m\n", id);
 	print_client(client);
 
 	free_client_members(client);
@@ -90,7 +100,7 @@ void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t id) {
 	}
 }
 
-/** Remove all client routes - used when exiting l3roamd
+/** Remove all client routes - used when exiting
 ** **/
 void clientmgr_purge_clients(clientmgr_ctx *ctx) {
 	struct client *client;
@@ -106,13 +116,20 @@ bool clientmgr_refresh_client(struct client *client) {
 
 	if (!existingclient) {
 		// create new client
-		log_verbose("clientmgr: creating client: %u\n", client->id);
+		log_verbose("clientmgr: creating client: %lu\n", client->id);
 		client_t n_client = {};
 		new_client(&n_client, client->id, &client->ip, client->port);
 		existingclient = get_client(client->id);
+
+		// TODO: send intercom buffer to this cli ent
+		for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
+			log_debug("sending packet %d\n",i);
+			audio_packet *ap = &VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, i);
+			intercom_send_packet_unicast(&snapctx.intercom_ctx, &existingclient->ip, ap->data, ap->len, existingclient->port);
+		}
 	}
 
-	log_verbose("clientmgr: refreshing client: %u\n", client->id);
+	log_verbose("clientmgr: refreshing client: %lu\n", client->id);
 	print_client(existingclient);
 	reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);
 

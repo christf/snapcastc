@@ -19,8 +19,8 @@ enum { AUDIO,
        AUDIO_PCM,
        AUDIO_OPUS,
        AUDIO_OGG,
-       AUDIO_FLAC };   // TLV type for UDIO packets, AUDIO will be obsoleted by the more specific types once implemented.
-enum { STREAM_INFO };  // TLV - types for server op
+       AUDIO_FLAC };   // TLV type for AUDIO packets, AUDIO will be obsoleted by the more specific types once implemented.
+enum { STREAM_INFO, CLIENT_STOP };  // TLV - types for server op
 
 typedef struct __attribute__((__packed__)) {
 	uint8_t version;
@@ -28,6 +28,11 @@ typedef struct __attribute__((__packed__)) {
 	uint16_t empty;
 	uint32_t nonce;
 } intercom_packet_hdr;
+
+typedef struct __attribute__((__packed__)) {
+	uint8_t type;
+	uint8_t length;
+} tlv_op;
 
 typedef struct __attribute__((__packed__)) {
 	uint8_t type;
@@ -72,7 +77,6 @@ struct intercom_task {
 	uint8_t retries_left;
 };
 
-
 typedef struct {
 	uint8_t *data;
 	uint16_t len;
@@ -82,7 +86,6 @@ typedef struct {
 struct buffer_cleanup_task {
 	audio_packet ap;
 };
-
 
 typedef struct {
 	struct in6_addr serverip;
@@ -108,12 +111,14 @@ typedef struct {
 
 void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk);
 void intercom_recently_seen_add(intercom_ctx *ctx, intercom_packet_hdr *hdr);
-void intercom_send_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_len);
+bool intercom_send_packet_unicast(intercom_ctx *ctx, const struct in6_addr *recipient, uint8_t *packet, ssize_t packet_len, int port);
 void intercom_seek(intercom_ctx *ctx, const struct in6_addr *address);
 void intercom_init_unicast(intercom_ctx *ctx);
 void intercom_init(intercom_ctx *ctx);
 void intercom_handle_in(intercom_ctx *ctx, int fd);
 bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int port);
+bool intercom_stop_client(intercom_ctx *ctx, const struct in6_addr *recipient, int port);
+
 struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx);
 
 bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret);
