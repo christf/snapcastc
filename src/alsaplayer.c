@@ -10,7 +10,6 @@
 
 #include "timespec.h"
 
-#define PCM_DEVICE "default"
 #define PERIOD_TIME 30000
 
 // librubberband may get more interesting when compressing data. feeding 2048 samples at a time is out of question when using PCM, UDP and 16 Bit 2
@@ -85,7 +84,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 
 	size_t delay_ms_alsa = delay_frames * 1000 / snapctx.alsaplayer_ctx.rate;
 
-	ts = timeAddMs(&ts, delay_ms_alsa);
+	ts = timeAddMs(&ts, delay_ms_alsa + snapctx.alsaplayer_ctx.latency_ms);
 
 	timediff tdiff = timeSub(&ts, &nextchunk_playat);
 	// log_debug("ctime: %s nextchunk playat: %s, difference: %s\n", print_timespec(&ctime), print_timespec(&nextchunk_playat),
@@ -276,8 +275,36 @@ void init_alsafd(alsaplayer_ctx *ctx) {
 	}
 }
 
-void adjustVolume(unsigned char *buffer, size_t count, double volume) {
-	for (size_t n = 0; n < count; ++n) buffer[n] = (buffer[n]) * volume;
+void mixer_init(alsaplayer_ctx *ctx) {
+	snd_mixer_selem_id_t *sid;
+	snd_mixer_open(&ctx->mixer_handle, 0);
+	snd_mixer_attach(ctx->mixer_handle, ctx->card);
+	snd_mixer_selem_register(ctx->mixer_handle, NULL, NULL);
+	snd_mixer_load(ctx->mixer_handle);
+
+	snd_mixer_selem_id_alloca(&sid);
+	snd_mixer_selem_id_set_index(sid, 0);
+	snd_mixer_selem_id_set_name(sid, ctx->mixer);
+	ctx->mixer_elem = snd_mixer_find_selem(ctx->mixer_handle, sid);
+
+	snd_mixer_selem_get_playback_volume_range(ctx->mixer_elem, &ctx->mixer_min, &ctx->mixer_max);
+}
+
+void mixer_uninit(alsaplayer_ctx *ctx) { snd_mixer_close(ctx->mixer_handle); }
+
+uint8_t obtain_volume(alsaplayer_ctx *ctx) {
+	long volume = 0;
+	mixer_init(ctx);
+	snd_mixer_selem_get_playback_volume(ctx->mixer_elem, SND_MIXER_SCHN_MONO, &volume);
+	mixer_uninit(ctx);
+	log_debug("Obtained volume (raw): %lu, Max value (raw): %lu, Volume (percent): %lu\n", volume, ctx->mixer_max, volume * 100 / ctx->mixer_max);
+	return volume * 100 / ctx->mixer_max;
+}
+
+void adjustVolume(alsaplayer_ctx *ctx, long volume) {
+	mixer_init(ctx);
+	snd_mixer_selem_set_playback_volume_all(ctx->mixer_elem, volume * ctx->mixer_max / 100);
+	mixer_uninit(ctx);
 }
 
 void alsaplayer_init(alsaplayer_ctx *ctx) {
@@ -298,7 +325,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 
 	ctx->pcm_handle = NULL;
 	if ((pcm = snd_pcm_open(&ctx->pcm_handle, ctx->pcm.name, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0)
-		log_error("ERROR: Cannot open \"%s\" PCM device. %s\n", PCM_DEVICE, snd_strerror(pcm));
+		log_error("ERROR: Cannot open \"%s\" PCM device. %s\n", ctx->pcm.name, snd_strerror(pcm));
 
 	snd_pcm_hw_params_malloc(&ctx->params);
 	snd_pcm_hw_params_any(ctx->pcm_handle, ctx->params);

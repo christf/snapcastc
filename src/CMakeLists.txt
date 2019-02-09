@@ -4,10 +4,11 @@ list(APPEND CMAKE_REQUIRED_DEFINITIONS '-D_GNU_SOURCE')
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SNAPCAST_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
-# TODO the clientmgr should only be linked into the server. since intercom includes it, it currently must be in both
-list(APPEND COMMON_DEPS util.c taskqueue.c timespec.c vector.c syscallwrappers.c intercom.c clientmgr.c pcmchunk.c opuscodec.c)
+# TODO the clientmgr should only be linked into the server. since intercom includes it, it currently must be in both. Alsaplayer is included by intercom as well for the client side.
+# Maybe split intercom into a client and server part?
+list(APPEND COMMON_DEPS util.c taskqueue.c timespec.c vector.c syscallwrappers.c intercom.c clientmgr.c pcmchunk.c opuscodec.c alsaplayer.c)
 
-list(APPEND CLIENT_DEPS client.c alsaplayer.c)
+list(APPEND CLIENT_DEPS client.c)
 list(APPEND SERVER_DEPS server.c inputpipe.c)
 
 add_library(common_libs OBJECT ${COMMON_DEPS})
