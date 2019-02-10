@@ -69,8 +69,7 @@ void add_fd(int efd, int fd, uint32_t events) {
 void del_fd(int efd, int fd) {
 	int s = epoll_ctl(efd, EPOLL_CTL_DEL, fd, NULL);
 	if (s == -1) {
-		perror("epoll_ctl (DEL):");
-		exit_error("epoll_ctl");
+		exit_errno("epoll_ctl (DEL):");
 	}
 }
 
