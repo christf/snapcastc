@@ -20,6 +20,8 @@ Linux. Patches for other platforms are welcome.
   latency. Pipes in Linux by default buffer up to 64KB of data. On my machine I can 
   see that once in a while the input pipe will not be read for multiple seconds. 
   To compensate I am running snapcast with a very large buffer.
+* That being said, care has been taken to allow immediate playback and pausing 
+  when using elastic pipes.
 
 ### Low CPU Usage
 
@@ -71,7 +73,6 @@ Allowed options:
   -p <port>                           Server UDP port (default: 1704)
   -P <port>                           Remote TCP control port (default: 1705)
   -s <file>                           filename of the PCM input stream.
-  -f arg (=48000:16:2)                Sample format *
   -c, --codec arg (=opus)             Default transport codec *
                                       (flac*|opus|pcm*)[:options]
   -B <read_ms>                        Default stream read buffer [ms]
@@ -81,7 +82,7 @@ Options marked with (*) are not implemented yet.
 
 I am starting snapserver like this:
 ```
-snapcast-server -b 25000 -s /tmp/snapfifo -f 48000:16:2 -B 120 -p 1704
+snapcast-server -b 25000 -s /tmp/snapfifo -B 120 -p 1704
 ```
 
 ### Client
