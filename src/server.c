@@ -112,8 +112,8 @@ void loop() {
 				int ret = inputpipe_handle(&snapctx.inputpipe_ctx);
 				if (ret == -1) {
 					del_fd(efd, snapctx.inputpipe_ctx.fd);
-					log_debug("throttling input from fifo\n");
-					post_task(&snapctx.taskqueue_ctx, 0, snapctx.readms, resume_read, NULL, &efd);
+					log_debug("throttling input from fifo, resuming read in %d ms\n", snapctx.readms);
+					post_task(&snapctx.taskqueue_ctx, snapctx.readms / 1000, snapctx.readms % 1000, resume_read, NULL, &efd);
 				} else if (ret == 1) {
 					// TODO: only encode when there is at least one client to save CPU cycles
 					encode_opus_handle(&snapctx.inputpipe_ctx.chunk);
