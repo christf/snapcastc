@@ -44,6 +44,7 @@ typedef struct __attribute__((__packed__)) {
 	uint8_t type;
 	uint8_t length;
 	uint32_t node_id;
+	uint32_t latency;
 	uint8_t volume;
 } tlv_hello;
 

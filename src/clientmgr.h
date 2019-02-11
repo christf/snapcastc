@@ -13,7 +13,10 @@ typedef struct client {
 	uint16_t port;
 	char name[NI_MAXHOST];
 	uint32_t id;
-	uint8_t volume;
+	uint32_t latency;
+
+	uint8_t volume_percent;
+	bool muted;
 
 	taskqueue_t *purge_task;
 } client_t;

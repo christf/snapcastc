@@ -97,11 +97,9 @@ Allowed options:
   -H, --host arg                  server hostname or ip address
   -p (=1704)                      local port
   -P (=1704)                      server port
-  --latency arg (=0)              latency of the soundcard *
+  -L arg (=0)                     latency of the client in ms
   -i, --instance arg (=1)         instance id
 ```
-
-Options marked with (*) are not implemented yet.
 
 I am starting the client like this:
 ```

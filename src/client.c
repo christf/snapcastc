@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
 	int c;
-	while ((c = getopt_long(argc, argv, "lVvdhH:p:s:i:c:m:", long_options, &option_index)) != -1) {
+	while ((c = getopt_long(argc, argv, "lVvdhH:p:s:i:L:c:m:", long_options, &option_index)) != -1) {
 		switch (c) {
 			case 'V':
 				printf("snapclient %s\n", SOURCE_VERSION);
@@ -236,6 +236,9 @@ int main(int argc, char *argv[]) {
 			/* Falls through. */
 			case 'v':
 				snapctx.verbose = true;
+				break;
+			case 'L':
+				snapctx.alsaplayer_ctx.latency_ms = atol(optarg);
 				break;
 			case 'h':
 			default:

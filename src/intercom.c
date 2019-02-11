@@ -127,10 +127,12 @@ int assemble_request(uint8_t *packet, uint32_t nonce) {
 
 int assemble_hello(uint8_t *packet) {
 	packet[0] = HELLO;
-	packet[1] = 7;
-	uint32_t n_nodeid = htonl(snapctx.intercom_ctx.nodeid);
-	memcpy(&packet[2], &n_nodeid, sizeof(uint32_t));
-	packet[6] = obtain_volume(&snapctx.alsaplayer_ctx);
+	packet[1] = 11;
+	uint32_t n_tmp = htonl(snapctx.intercom_ctx.nodeid);
+	memcpy(&packet[2], &n_tmp, sizeof(uint32_t));
+	n_tmp = htonl(snapctx.alsaplayer_ctx.latency_ms);
+	memcpy(&packet[6], &n_tmp, sizeof(uint32_t));
+	packet[10] = obtain_volume(&snapctx.alsaplayer_ctx);
 	return packet[1];
 }
 
@@ -176,10 +178,12 @@ int parse_request(uint8_t *packet, uint32_t *nonce) {
 }
 
 int parse_hello(uint8_t *packet, client_t *client) {
-	uint32_t nodeid;
-	memcpy(&nodeid, &packet[2], sizeof(uint32_t));
-	client->id = ntohl(nodeid);
-	client->volume = packet[7];
+	uint32_t tmp;
+	memcpy(&tmp, &packet[2], sizeof(uint32_t));
+	client->id = ntohl(tmp);
+	memcpy(&tmp, &packet[6], sizeof(uint32_t));
+	client->latency = ntohl(tmp);
+	client->volume_percent = packet[10];
 	return packet[1];
 }
 
