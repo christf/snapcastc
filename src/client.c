@@ -32,6 +32,8 @@
 #include "util.h"
 #include "vector.h"
 #include "version.h"
+#include "alsaplayer.h"
+#include "pcmchunk.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -132,8 +134,6 @@ void catch_sigterm() {
 	sigaction(SIGTERM, &_sigact, NULL);
 }
 
-#include "alsaplayer.h"
-#include "pcmchunk.h"
 
 int main(int argc, char *argv[]) {
 	snapctx.verbose = false;
@@ -147,6 +147,8 @@ int main(int argc, char *argv[]) {
 	snapctx.alsaplayer_ctx.channels = 2;
 	snapctx.alsaplayer_ctx.frame_size = 2;
 	snapctx.readms = 5;
+	snapctx.alsaplayer_ctx.card = strdup("default");
+	snapctx.alsaplayer_ctx.mixer = strdup("Master");
 	snapctx.alsaplayer_ctx.pcm.name = strdup("default");
 
 	// set some defaults
@@ -158,7 +160,7 @@ int main(int argc, char *argv[]) {
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
 	int c;
-	while ((c = getopt_long(argc, argv, "lVvdhH:p:s:i:", long_options, &option_index)) != -1) {
+	while ((c = getopt_long(argc, argv, "lVvdhH:p:s:i:c:m:", long_options, &option_index)) != -1) {
 		switch (c) {
 			case 'V':
 				printf("snapclient %s\n", SOURCE_VERSION);
@@ -166,6 +168,14 @@ int main(int argc, char *argv[]) {
 				printf("branch: %s\n commit: %s\n", GIT_BRANCH, GIT_COMMIT_HASH);
 #endif
 				exit(EXIT_SUCCESS);
+			case 'c':
+				free(snapctx.alsaplayer_ctx.card);
+				snapctx.alsaplayer_ctx.card = strdupa(optarg);
+				break;
+			case 'm':
+				free(snapctx.alsaplayer_ctx.mixer);
+				snapctx.alsaplayer_ctx.mixer = strdupa(optarg);
+				break;
 			case 's':
 				free(snapctx.alsaplayer_ctx.pcm.name);
 				snapctx.alsaplayer_ctx.pcm.name = strdupa(optarg);

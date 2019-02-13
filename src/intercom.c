@@ -5,6 +5,7 @@
 #include "syscallwrappers.h"
 #include "timespec.h"
 #include "util.h"
+#include "alsaplayer.h"
 
 #include "clientmgr.h"
 #include "pcmchunk.h"
@@ -123,11 +124,13 @@ int assemble_request(uint8_t *packet, uint32_t nonce) {
 	return packet[1];
 }
 
+
 int assemble_hello(uint8_t *packet) {
 	packet[0] = HELLO;
-	packet[1] = 6;
+	packet[1] = 7;
 	uint32_t n_nodeid = htonl(snapctx.intercom_ctx.nodeid);
 	memcpy(&packet[2], &n_nodeid, sizeof(uint32_t));
+	packet[6] = obtain_volume(&snapctx.alsaplayer_ctx);
 	return packet[1];
 }
 
@@ -176,6 +179,7 @@ int parse_hello(uint8_t *packet, client_t *client) {
 	uint32_t nodeid;
 	memcpy(&nodeid, &packet[2], sizeof(uint32_t));
 	client->id = ntohl(nodeid);
+	client->volume = packet[7];
 	return packet[1];
 }
 
@@ -620,7 +624,12 @@ void hello_task(void *d) {
 	log_verbose("saying hello to server\n");
 	struct intercom_task *data = d;
 	intercom_packet_hello *hello = (intercom_packet_hello *)data->packet;
+
 	hello->hdr.nonce = get_nonce();
+
+	int packet_len = sizeof(hello->hdr);
+
+	packet_len += assemble_hello((void *)(&data->packet[packet_len]));
 
 	intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len,
 				     snapctx.intercom_ctx.serverport);
@@ -642,14 +651,12 @@ bool intercom_stop_client(intercom_ctx *ctx, const struct in6_addr *recipient, i
 }
 
 bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int port) {
-	struct intercom_task *data = snap_alloc(sizeof(struct intercom_task));
-	data->packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_hello));
+	struct intercom_task *data = snap_alloc0(sizeof(struct intercom_task));
 
-	data->packet_len = assemble_header(&((intercom_packet_op *)data->packet)->hdr, CLIENT_OPERATION);
-	data->packet_len += assemble_hello((void *)(&data->packet[data->packet_len]));
+	data->packet_len = sizeof(intercom_packet_op) + sizeof(tlv_hello);
+	data->packet = snap_alloc(data->packet_len);
 
-	data->retries_left = 12;  // hellos will never stop repeating because the task will increment this value. Just set it to something above 0
-	data->check_task = NULL;
+	assemble_header(&((intercom_packet_op *)data->packet)->hdr, CLIENT_OPERATION);
 
 	if (recipient) {
 		data->recipient = snap_alloc_aligned(sizeof(struct in6_addr), 16);

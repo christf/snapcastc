@@ -43,6 +43,11 @@ typedef struct {
 
 typedef struct {
 	struct snapctx *snapctx;
+	long mixer_min;
+	long mixer_max;
+
+	char *card;
+	char *mixer;
 
 	// frame = samples (sample_size) * #channels
 	unsigned int rate;
@@ -54,9 +59,14 @@ typedef struct {
 	snd_pcm_uframes_t frames;
 	snd_pcm_sw_params_t *swparams;
 
+	snd_mixer_t *mixer_handle;
+	snd_mixer_elem_t* mixer_elem;
+
 	int pollfd_count;
 	struct pollfd *ufds;
 	struct pollfd *main_poll_fd;
+
+	uint32_t latency_ms;
 
 	pcmChunk *overflow;
 
@@ -71,5 +81,6 @@ void alsaplayer_handle(alsaplayer_ctx *ctx);
 void alsaplayer_init(alsaplayer_ctx *ctx);
 void alsaplayer_uninit(alsaplayer_ctx *ctx);
 void init_alsafd();
+uint8_t obtain_volume(alsaplayer_ctx *ctx);
 void alsaplayer_pcm_list();
 bool is_alsafd(const int fd, const alsaplayer_ctx *ctx);
