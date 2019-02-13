@@ -25,15 +25,15 @@
    */
 
 #include "alloc.h"
+#include "alsaplayer.h"
 #include "error.h"
+#include "pcmchunk.h"
 #include "snapcast.h"
 #include "syscallwrappers.h"
 #include "types.h"
 #include "util.h"
 #include "vector.h"
 #include "version.h"
-#include "alsaplayer.h"
-#include "pcmchunk.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -46,11 +46,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 #include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 
 snapctx_t snapctx = {};
 
@@ -133,7 +133,6 @@ void catch_sigterm() {
 
 	sigaction(SIGTERM, &_sigact, NULL);
 }
-
 
 int main(int argc, char *argv[]) {
 	snapctx.verbose = false;
@@ -257,7 +256,7 @@ int main(int argc, char *argv[]) {
 	intercom_hello(&snapctx.intercom_ctx, &snapctx.intercom_ctx.serverip, snapctx.intercom_ctx.serverport);
 
 	// we have realtime business when feeding the alsa buffer, setting prio may help on an otherwise busy client.
-	if ( setpriority(PRIO_PROCESS, 0, -5) ) {
+	if (setpriority(PRIO_PROCESS, 0, -5)) {
 		log_error("could not set priority\n");
 	}
 

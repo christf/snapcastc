@@ -21,9 +21,9 @@
 #include "clientmgr.h"
 #include "inputpipe.h"
 #include "intercom.h"
-#include "taskqueue.h"
 #include "opuscodec.h"
 #include "socket.h"
+#include "taskqueue.h"
 #include "types.h"
 
 #include <stddef.h>

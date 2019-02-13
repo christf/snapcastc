@@ -36,4 +36,3 @@ int socket_handle_in(socket_ctx *ctx);
 bool socket_get_client(socket_ctx *ctx, socketclient **sc_dest, int fd);
 int socket_handle_client(socket_ctx *ctx, socketclient *sc);
 void socket_client_remove(socket_ctx *ctx, socketclient *sc);
-

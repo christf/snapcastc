@@ -26,7 +26,6 @@
 #ifndef VERSION_H
 #define VERSION_H
 
-
 #define SOURCE_VERSION_MAJOR "0"
 #define SOURCE_VERSION_MINOR "0"
 #define SOURCE_VERSION_PATCH "1"

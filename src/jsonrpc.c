@@ -112,8 +112,7 @@ bool jsonrpc_parse_string(jsonrpc_request *result, char *line) {
 
 	json_object_put(jobj);
 
-	log_debug("found %d parameters\n", VECTOR_LEN(result->parameters) );
+	log_debug("found %d parameters\n", VECTOR_LEN(result->parameters));
 
 	return true;
 }
-

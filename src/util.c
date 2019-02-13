@@ -79,9 +79,10 @@ const char *print_mac(const uint8_t mac[6]) {
 	return strbuffer[str_bufferoffset];
 }
 
-const char* print_chunk(pcmChunk *chunk) {
+const char *print_chunk(pcmChunk *chunk) {
 	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
-	snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "codec: %i play_at: %lu.%09lu", chunk->codec, chunk->play_at_tv_sec, chunk->play_at_tv_nsec);
+	snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "codec: %i play_at: %lu.%09lu", chunk->codec, chunk->play_at_tv_sec,
+		 chunk->play_at_tv_nsec);
 	return strbuffer[str_bufferoffset];
 }
 

@@ -25,13 +25,12 @@
 */
 #pragma once
 
-#include "taskqueue.h"
 #include "pcmchunk.h"
+#include "taskqueue.h"
 
 #include <alsa/asoundlib.h>
 #include <stdbool.h>
 #include <sys/types.h>
-
 
 #define NOT_EVEN_CLOSE_MS 30
 
@@ -60,7 +59,7 @@ typedef struct {
 	snd_pcm_sw_params_t *swparams;
 
 	snd_mixer_t *mixer_handle;
-	snd_mixer_elem_t* mixer_elem;
+	snd_mixer_elem_t *mixer_elem;
 
 	int pollfd_count;
 	struct pollfd *ufds;

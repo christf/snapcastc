@@ -22,10 +22,7 @@ void get_emptychunk(pcmChunk *ret) {
 	log_debug("created empty chunk with size %d\n", ret->size);
 }
 
-
-int chunk_getduration_ms(pcmChunk *chunk) {
-	return 1000 * chunk->size / chunk->channels / chunk->frame_size / chunk->samples;
-}
+int chunk_getduration_ms(pcmChunk *chunk) { return 1000 * chunk->size / chunk->channels / chunk->frame_size / chunk->samples; }
 
 bool chunk_is_empty(pcmChunk *c) { return !(c->play_at_tv_sec > 0); }
 
@@ -35,7 +32,6 @@ void chunk_ntoh(pcmChunk *chunk) {
 	chunk->samples = ntohl(chunk->samples);
 	chunk->size = ntohs(chunk->size);
 }
-
 
 void chunk_free_members(pcmChunk *chunk) {
 	free(chunk->data);
@@ -52,16 +48,12 @@ void pcmchunk_shaveoff(pcmChunk *chunk, int frames) {
 	chunk->data = ndata;
 	chunk->size -= removebytes;
 
-	struct timespec play_at = {
-		.tv_sec = chunk->play_at_tv_sec,
-		.tv_nsec = chunk->play_at_tv_nsec
-	};
+	struct timespec play_at = {.tv_sec = chunk->play_at_tv_sec, .tv_nsec = chunk->play_at_tv_nsec};
 
 	play_at = timeAddMs(&play_at, frames * 1000 / chunk->samples);
 	chunk->play_at_tv_sec = play_at.tv_sec;
 	chunk->play_at_tv_nsec = play_at.tv_nsec;
 }
-
 
 void chunk_hton(pcmChunk *chunk) {
 	chunk->play_at_tv_sec = htonl(chunk->play_at_tv_sec);
