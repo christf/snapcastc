@@ -121,6 +121,7 @@ bool clientmgr_refresh_client(struct client *client) {
 		client_t n_client = {};
 		new_client(&n_client, client->id, &client->ip, client->port);
 		existingclient = get_client(client->id);
+		client->connected = true;
 
 		for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
 			log_debug("sending packet %d\n", i);
@@ -138,6 +139,8 @@ bool clientmgr_refresh_client(struct client *client) {
 
 	existingclient->connected = true;
 	existingclient->lastseen = ctime;
+	existingclient->latency = client->latency;
+	existingclient->volume_percent = client->volume_percent;
 	log_verbose("clientmgr: refreshing client: %lu\n", client->id);
 	print_client(existingclient);
 	reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);
