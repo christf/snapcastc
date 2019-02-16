@@ -8,6 +8,8 @@
 #include <rubberband/rubberband-c.h>
 #include <stdio.h>
 
+#include <soxr.h>
+
 #include "timespec.h"
 
 #define PERIOD_TIME 30000
@@ -33,6 +35,25 @@ void adjust_speed_rubber(pcmChunk *chunk, double factor) {
 	chunk->size = outframes * chunk->channels * chunk->frame_size;
 }
 
+void adjust_speed_soxr(pcmChunk *chunk, double factor) {
+	double orate = chunk->samples * factor;
+	size_t olen = (size_t)(chunk->size * orate / chunk->samples + .5);
+	size_t odone;
+
+	uint8_t *out = snap_alloc(factor * chunk->size);
+
+	soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_QQ, 0);   // TODO: make this configurable - Raspi: SOXR_QQ, desktop: SOXR_LQ
+	soxr_io_spec_t io_spec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);  // TODO this should not be hard-coded.
+
+	soxr_error_t error = soxr_oneshot(chunk->samples, orate, chunk->channels, chunk->data, chunk->size / chunk->channels / chunk->frame_size,
+					  NULL, out, olen, &odone, &io_spec, &quality_spec, NULL);
+
+	log_debug("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
+	free(chunk->data);
+	chunk->data = out;
+	chunk->size = olen;
+}
+
 void adjust_speed_simple(pcmChunk *chunk, double factor) {
 	// stretch by removing or inserting a single frame at the end of the chunk.
 	// Beware: This reduces ability to sync when larger chunks are used and the logic does not consider the factor at all beyond it being larger
@@ -53,7 +74,8 @@ void adjust_speed_simple(pcmChunk *chunk, double factor) {
 
 void adjust_speed(pcmChunk *chunk, double factor) {
 	// TODO: should we be able to select this via cli option?
-	adjust_speed_simple(chunk, factor);
+	// adjust_speed_simple(chunk, factor);
+	adjust_speed_soxr(chunk, factor);
 }
 
 int max(int a, int b) {
