@@ -140,7 +140,12 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	}
 
 	if (!is_near) {
-		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / 1000)));
+
+		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / chunk_getduration_ms(p) )));
+		if (factor > 2)
+			factor = 2;
+		if (factor < 0.5)
+			factor = 0.5;
 
 		// TODO: this factor already works pretty well, however we may end up in a local optimum while just playing one frame less or one
 		// frame more might be optimal.
