@@ -140,14 +140,17 @@ void loop() {
 					int tmp = read(events[i].data.fd, buffer, 512);
 					if (tmp < 0)
 						perror("read:");
-					else
+					else if (tmp == 0) {  // EOF. Close silently
+						close(events[i].data.fd);
+					} else {
 						log_error("  WE JUST READ %i Byte from unknown socket %i or with unknown event with content %s\n",
 							  tmp, events[i].data.fd, buffer);
+					}
 					break;
 				}
 				log_error("event is not EPOLLIN but still from an unknown fd. - This likely is a bug.\n");
 			}
-			log_error("iteration %d of %d on fd %d\n", i, n, events[i].data.fd);
+			log_debug("handled event on fd %d - Event %d out of %d\n", events[i].data.fd, i + 1, n);
 			events[i].events = 0;  // clear events for next iteration
 		}
 	}
