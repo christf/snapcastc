@@ -36,6 +36,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <json-c/json.h>
+
 #include "version.h"
 
 #define CONTROLPROTOCOLVERSION 1
@@ -104,7 +106,7 @@ void json_add_group(json_object *out) {
 		json_object_object_add(client, "connected", json_object_new_boolean(c->connected));
 
 		json_object *host = json_object_new_object();
-		//json_build_host(host, "unknown", print_ip(&c->ip), print_mac(c->mac), "", "unknown");
+		// json_build_host(host, "unknown", print_ip(&c->ip), print_mac(c->mac), "", "unknown");
 		json_build_host(host, "unknown", "::ffff:192.168.13.153", "60:57:18:88:d7:f9", "lappi", "Linux");
 		json_object_object_add(client, "host", host);
 
@@ -217,7 +219,7 @@ void json_build_serverstatus_server(json_object *in) {
 	json_object_object_add(snapserver, "controlProtocolVersion", json_object_new_int(CONTROLPROTOCOLVERSION));
 	json_object_object_add(snapserver, "name", json_object_new_string("Snapserver"));
 	json_object_object_add(snapserver, "protocolVersion", json_object_new_int(PACKET_FORMAT_VERSION));
-	//json_object_object_add(snapserver, "version", json_object_new_string(SOURCE_VERSION));
+	// json_object_object_add(snapserver, "version", json_object_new_string(SOURCE_VERSION));
 	json_object_object_add(snapserver, "version", json_object_new_string("0.15.0"));
 
 	json_object_object_add(server, "host", host);
@@ -276,9 +278,59 @@ void socket_init(socket_ctx *ctx) {
 		exit_errno("Could not listen on status socket");
 }
 
+void handle_client_setvolume(jsonrpc_request *request, int fd) {
+	// Request: {"id":8,"jsonrpc":"2.0","method":"Client.SetVolume","params":{"id":"00:21:6a:7d:74:fc","volume":{"muted":false,"percent":74}}}
+	// Response: {"id":8,"jsonrpc":"2.0","result":{"volume":{"muted":false,"percent":74}}}
+
+	json_object *response = json_object_new_object();
+	json_object *result = json_object_new_object();
+	jsonrpc_buildresult(response, request->id, result);
+
+	int clientid = 0;
+	json_object *jobj;
+	json_object *mute;
+	json_object *vol_percent;
+	bool bool_result = false;
+
+	for (int i = VECTOR_LEN(request->parameters) - 1; i >= 0; --i) {
+		parameter *p = &VECTOR_INDEX(request->parameters, i);
+		if (!strncmp(p->name, "id", 2))
+			clientid = p->value.number;
+		else if (!strncmp(p->name, "volume", 7)) {
+			jobj = json_tokener_parse(p->value.json_string);
+
+			if (!jobj) {
+				log_error("error parsing json %s\n", p->value.json_string);
+				goto reply;
+			}
+
+			if (!json_object_object_get_ex(jobj, "percent", &vol_percent) && !json_object_object_get_ex(jobj, "muted", &mute)) {
+				log_error("Either mute or volume are mandatory in a volume object. We received %s\n", p->value.json_string);
+				goto reply;
+			}
+		}
+	}
+
+	// TODO: implement volume change
+	if (mute)
+		bool_result = clientmgr_client_setmute(clientid, json_object_get_boolean(mute));
+
+	json_object_put(mute);
+	json_object_put(vol_percent);
+	json_object_put(jobj);
+
+// TODO: for compatibility with snapcast, return the result as described in the api
+reply:
+	json_object_object_add(result, "status", json_object_new_boolean(bool_result));
+	json_object_print_and_put(fd, response);
+}
+
 int handle_request(jsonrpc_request *request, int fd) {
 	if (!strncmp(request->method, "Server.GetRPCVersion", 20)) {
 		handle_GetRPCVersion(request, fd);
+	} else if (!strncmp(request->method, "Client.SetVolume", 16)) {
+		log_debug("calling server Client.SetVolume\n");
+		handle_client_setvolume(request, fd);
 	} else if (!strncmp(request->method, "Server.GetStatus", 16)) {
 		log_debug("calling server getstatus\n");
 		handle_server_getstatus(request, fd);
@@ -378,7 +430,9 @@ int socket_handle_in(socket_ctx *ctx) {
 
 	int fd = accept(ctx->fd, NULL, NULL);
 	int flags = fcntl(fd, F_GETFL, 0);
-	fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK)) {
+		exit_errno("could not set socket to non-blocking\n");
+	}
 
 	socketclient sc = {.fd = fd, .line_offset = 0, .line[0] = '\0'};
 	VECTOR_ADD(ctx->clients, sc);

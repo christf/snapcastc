@@ -615,7 +615,8 @@ void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
 
 	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
 		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
-		intercom_send_packet_unicast(&snapctx.intercom_ctx, &c->ip, packet, packet_len, c->port);
+		if ( (!c->muted) && c->volume_percent)
+			intercom_send_packet_unicast(&snapctx.intercom_ctx, &c->ip, packet, packet_len, c->port);
 	}
 }
 

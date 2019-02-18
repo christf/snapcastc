@@ -23,6 +23,33 @@ struct client *findinvector(void *_vector, const uint32_t id) {
 	return NULL;
 }
 
+void clientmgr_send_audio_buffer_to_client(client_t *client) {
+	for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
+		log_error("sending packet %d to %s\n", i, print_ip(&client->ip));
+		audio_packet *ap = &VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, i);
+		intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, ap->data, ap->len, client->port);
+	}
+}
+
+bool clientmgr_client_setmute(uint32_t clientid, bool mute) {
+	client_t *c = get_client(clientid);
+	if (c) {
+		bool mute_changed=false;
+		if (c->muted != mute ) {
+			mute_changed = true;
+			c->muted = mute;
+		}
+
+		if (mute)
+			intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
+		else if ( (! mute) && mute_changed)
+			clientmgr_send_audio_buffer_to_client(c);
+
+		return true;
+	}
+	return false;
+}
+
 void clientmgr_stop_clients() {
 	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
 		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
@@ -123,11 +150,7 @@ bool clientmgr_refresh_client(struct client *client) {
 		existingclient = get_client(client->id);
 		client->connected = true;
 
-		for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
-			log_debug("sending packet %d\n", i);
-			audio_packet *ap = &VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, i);
-			intercom_send_packet_unicast(&snapctx.intercom_ctx, &existingclient->ip, ap->data, ap->len, existingclient->port);
-		}
+		clientmgr_send_audio_buffer_to_client(existingclient);
 
 		existingclient->protoversion = 2;  // For some reason we have protoversion 2 for clients now.
 

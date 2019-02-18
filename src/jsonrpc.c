@@ -14,14 +14,15 @@ void jsonrpc_free_members(jsonrpc_request *req) {
 		free(p->name);
 		if (p->type == json_type_string)
 			free(p->value.string);
+		if (p->type == json_type_object)
+			free(p->value.json_string);
 	}
 
 	VECTOR_FREE(req->parameters);
 }
 
 void strcopy_from_json(char **dest, json_object *jobj) {
-	// this will remove quotes from strings, make sure to free the result
-	// after use
+	// this will remove quotes from strings, make sure to free the result after use
 	*dest = snap_alloc(strlen(json_object_to_json_string_ext(jobj, 0)) - 2);
 	strncpy(*dest, &json_object_to_json_string_ext(jobj, 0)[1], strlen(json_object_to_json_string_ext(jobj, 0)) - 2);
 }
@@ -88,7 +89,11 @@ bool jsonrpc_parse_string(jsonrpc_request *result, char *line) {
 						p.value.number = json_object_get_int(val);
 						break;
 					case json_type_object:
-						log_error("found json_type_object - NOT IMPLEMENTED. THIS SHOULD NOT HAPPEN\n");
+						log_error("found json_type_object %s\n", key);
+						json_object *tmp = NULL;
+						if (!json_object_object_get_ex(params, key, &tmp))
+							log_error("could not get json object %s\n", key);
+						p.value.json_string = strdup(json_object_to_json_string(tmp));
 						break;
 					case json_type_array:
 						log_error("found json_type_array - NOT IMPLEMENTED. THIS SHOULD NOT HAPPEN.\n");

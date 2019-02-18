@@ -13,6 +13,7 @@ typedef struct {
 		int number;
 		double dnumber;
 		bool bvalue;
+		char *json_string; // this should really be a json_object. However since son-c 0.12 does not support deep_copy() yet, serialize / deserialize for compatibility
 	} value;
 } parameter;
 
