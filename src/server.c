@@ -93,11 +93,12 @@ void loop() {
 
 			if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP)) {
 				char strbuf[512];
-				snprintf(strbuf, 512, "epoll error received on fd %i, continuing\n", events[i].data.fd);
+				snprintf(strbuf, 512, "epoll error received on fd %i", events[i].data.fd);
 				perror(strbuf);
 
 				if ((snapctx.inputpipe_ctx.fd == events[i].data.fd)) {
 					log_error("input pipe was closed (mpd stopped?). Re-initializing-.\n");
+					perror("received signal was");
 					del_fd(efd, snapctx.inputpipe_ctx.fd);
 					inputpipe_uninit(&snapctx.inputpipe_ctx);
 
@@ -105,6 +106,12 @@ void loop() {
 
 					inputpipe_init(&snapctx.inputpipe_ctx);
 					add_fd(efd, snapctx.inputpipe_ctx.fd, EPOLLIN);
+				} else if (socket_get_client(&snapctx.socket_ctx, NULL, events[i].data.fd)) {
+					log_error("error received on one of the socket clients. Closing %d\n", events[i].data.fd);
+					socketclient *sc = NULL;
+					socket_get_client(&snapctx.socket_ctx, &sc, events[i].data.fd);
+					del_fd(efd, sc->fd);
+					socket_client_remove(&snapctx.socket_ctx, sc);
 				} else
 					sig_term_handler(0, 0, 0);
 			} else if ((snapctx.taskqueue_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
@@ -125,7 +132,9 @@ void loop() {
 				intercom_handle_in(&snapctx.intercom_ctx, events[i].data.fd);
 			} else if ((snapctx.socket_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				int cfd = socket_handle_in(&snapctx.socket_ctx);
-				add_fd(efd, cfd, EPOLLIN);
+				if (cfd > 0) {
+					add_fd(efd, cfd, EPOLLIN);
+				}
 			} else if (socket_get_client(&snapctx.socket_ctx, NULL, events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				socketclient *sc = NULL;
 				socket_get_client(&snapctx.socket_ctx, &sc, events[i].data.fd);
@@ -141,7 +150,7 @@ void loop() {
 					if (tmp < 0)
 						perror("read:");
 					else if (tmp == 0) {  // EOF. Close silently
-						close(events[i].data.fd);
+						log_error("just read EOF on fd %d\n", events[i].data.fd);
 					} else {
 						log_error("  WE JUST READ %i Byte from unknown socket %i or with unknown event with content %s\n",
 							  tmp, events[i].data.fd, buffer);
