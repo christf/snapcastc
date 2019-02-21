@@ -45,8 +45,6 @@ typedef struct {
 client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *host, const uint16_t port);
 struct client *get_client(const uint32_t clientid);
 
-void free_client(client_t *client);
-
 void print_client(struct client *client);
 bool clientmgr_refresh_client(struct client *client);
 void clientmgr_purge_clients(clientmgr_ctx *ctx);

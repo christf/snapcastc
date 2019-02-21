@@ -89,9 +89,6 @@ client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip
 	return ret;
 }
 
-void free_client_members(client_t *client) {  // free(client->name);
-}
-
 struct client *get_client(const uint32_t id) {
 	return findinvector(&snapctx.clientmgr_ctx.clients, id);
 }
@@ -114,8 +111,6 @@ void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t id) {
 
 	log_verbose("\033[34mREMOVING client %lu\033[0m\n", id);
 	print_client(client);
-
-	free_client_members(client);
 
 	// TODO migrate to vector_lsearch
 	for (int i = VECTOR_LEN(ctx->clients) - 1; i >= 0; i--) {
