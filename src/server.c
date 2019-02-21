@@ -137,11 +137,15 @@ void loop() {
 				}
 			} else if (socket_get_client(&snapctx.socket_ctx, NULL, events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				socketclient *sc = NULL;
-				socket_get_client(&snapctx.socket_ctx, &sc, events[i].data.fd);
-				if (socket_handle_client(&snapctx.socket_ctx, sc) < 0) {
-					log_error("closing client: %d\n", sc->fd);
-					del_fd(efd, sc->fd);
-					socket_client_remove(&snapctx.socket_ctx, sc);
+				if ( socket_get_client(&snapctx.socket_ctx, &sc, events[i].data.fd)) {
+					if (socket_handle_client(&snapctx.socket_ctx, sc) < 0) {
+						log_error("closing client: %d\n", sc->fd);
+						del_fd(efd, sc->fd);
+						socket_client_remove(&snapctx.socket_ctx, sc);
+					}
+				}
+				else {
+					log_error("socketclient with fd %d not found\n",  events[i].data.fd);
 				}
 			} else {
 				if (events[i].events == EPOLLIN) {
