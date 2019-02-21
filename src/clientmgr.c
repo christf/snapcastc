@@ -31,23 +31,23 @@ void clientmgr_send_audio_buffer_to_client(client_t *client) {
 	}
 }
 
-bool clientmgr_client_setmute(uint32_t clientid, bool mute) {
-	client_t *c = get_client(clientid);
-	if (c) {
-		bool mute_changed=false;
-		if (c->muted != mute ) {
-			mute_changed = true;
-			c->muted = mute;
-		}
+bool clientmgr_client_refreshvolume(client_t *client, uint8_t volume) {
+	intercom_set_volume(&snapctx.intercom_ctx, &client->ip, client->port, volume);
+}
 
-		if (mute)
-			intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
-		else if ( (! mute) && mute_changed)
-			clientmgr_send_audio_buffer_to_client(c);
-
-		return true;
+bool clientmgr_client_setmute(client_t *c, bool mute) {
+	bool mute_changed=false;
+	if (c->muted != mute ) {
+		mute_changed = true;
+		c->muted = mute;
 	}
-	return false;
+
+	if (mute)
+		intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
+	else if ( (! mute) && mute_changed)
+		clientmgr_send_audio_buffer_to_client(c);
+
+	return true;
 }
 
 void clientmgr_stop_clients() {
@@ -64,6 +64,8 @@ void schedule_delete_client(void *d) {
 
 client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip, const uint16_t port) {
 	struct sockaddr_in6 speer = {};
+
+	log_verbose("\033[34mADDING client %lu\033[0m\n", id);
 
 	memcpy(&speer.sin6_addr, ip, sizeof(struct in6_addr));
 	speer.sin6_port = port;
@@ -132,6 +134,19 @@ void clientmgr_purge_clients(clientmgr_ctx *ctx) {
 	}
 }
 
+bool is_roughly(uint8_t a, uint8_t b) {
+	if (a == b)
+		return true;
+	else {
+		int sa = a;
+		int sb = b;
+		if ( abs(sa - sb) < 2)
+			return true;
+	}
+
+	return false;
+}
+
 bool clientmgr_refresh_client(struct client *client) {
 	client_t *existingclient = get_client(client->id);
 	struct timespec ctime;
@@ -145,6 +160,8 @@ bool clientmgr_refresh_client(struct client *client) {
 		existingclient = get_client(client->id);
 		client->connected = true;
 
+		existingclient->volume_percent = client->volume_percent;
+
 		clientmgr_send_audio_buffer_to_client(existingclient);
 
 		existingclient->protoversion = 2;  // For some reason we have protoversion 2 for clients now.
@@ -157,8 +174,16 @@ bool clientmgr_refresh_client(struct client *client) {
 
 	existingclient->connected = true;
 	existingclient->lastseen = ctime;
-	existingclient->latency = client->latency;
-	existingclient->volume_percent = client->volume_percent;
+
+	if (client) {
+		existingclient->latency = client->latency;
+
+		if (!is_roughly(client->volume_percent, existingclient->volume_percent)) {
+			log_verbose("volume of client %d is not volume of existingclient %d\n", client->volume_percent, existingclient->volume_percent);
+			clientmgr_client_refreshvolume(existingclient, existingclient->volume_percent);
+		}
+	}
+
 	log_verbose("clientmgr: refreshing client: %lu\n", client->id);
 	print_client(existingclient);
 	reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);

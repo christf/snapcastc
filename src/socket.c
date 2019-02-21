@@ -68,7 +68,11 @@ bool group_get_muted() {
 	// TODO implement me
 	return false;
 }
-const char *group_get_id() { return "2427bc26-e219-8d33-901c-20493f46eb42"; }
+
+const char *group_get_id() {
+	// TODO implement me
+	return "2427bc26-e219-8d33-901c-20493f46eb42";
+}
 
 const char *group_get_name() { return ""; }
 
@@ -278,25 +282,29 @@ void socket_init(socket_ctx *ctx) {
 		exit_errno("Could not listen on status socket");
 }
 
-void handle_client_setvolume(jsonrpc_request *request, int fd) {
-	// Request: {"id":8,"jsonrpc":"2.0","method":"Client.SetVolume","params":{"id":"00:21:6a:7d:74:fc","volume":{"muted":false,"percent":74}}}
-	// Response: {"id":8,"jsonrpc":"2.0","result":{"volume":{"muted":false,"percent":74}}}
-
+bool handle_client_setvolume(jsonrpc_request *request, int fd) {
 	json_object *response = json_object_new_object();
 	json_object *result = json_object_new_object();
-	jsonrpc_buildresult(response, request->id, result);
 
 	int clientid = 0;
-	json_object *jobj;
-	json_object *mute;
-	json_object *vol_percent;
+	client_t *client = NULL;
+	json_object *jobj = NULL;
+	json_object *mute = NULL;
+	json_object *vol_percent = NULL;
 	bool bool_result = false;
+	int volume_int;
+	bool muted;
 
 	for (int i = VECTOR_LEN(request->parameters) - 1; i >= 0; --i) {
 		parameter *p = &VECTOR_INDEX(request->parameters, i);
-		if (!strncmp(p->name, "id", 2))
+		if (!strncmp(p->name, "id", 2)) {
 			clientid = p->value.number;
-		else if (!strncmp(p->name, "volume", 7)) {
+			client = get_client(clientid);
+			if (!client) {
+				log_error("received volume change request for unknown client %d\n", clientid);
+				break;
+			}
+		} else if (!strncmp(p->name, "volume", 6)) {
 			jobj = json_tokener_parse(p->value.json_string);
 
 			if (!jobj) {
@@ -306,23 +314,46 @@ void handle_client_setvolume(jsonrpc_request *request, int fd) {
 
 			if (!json_object_object_get_ex(jobj, "percent", &vol_percent) && !json_object_object_get_ex(jobj, "muted", &mute)) {
 				log_error("Either mute or volume are mandatory in a volume object. We received %s\n", p->value.json_string);
+				json_object_put(jobj);
 				goto reply;
 			}
+
+			if (vol_percent) {
+				volume_int = json_object_get_int(vol_percent);
+				json_object_put(vol_percent);
+			}
+
+			if (mute) {
+				muted = json_object_get_boolean(mute);
+				json_object_put(mute);
+			}
+
+			json_object_put(jobj);
 		}
 	}
 
-	// TODO: implement volume change
-	if (mute)
-		bool_result = clientmgr_client_setmute(clientid, json_object_get_boolean(mute));
+	if (client) {
+		if (vol_percent) {
+			bool_result = clientmgr_client_refreshvolume(client, volume_int);
+			client->volume_percent = volume_int;
+		}
+		if (mute) {
+			bool_result = clientmgr_client_setmute(client, muted);
+			client->muted = muted;
+		}
+	}
 
-	json_object_put(mute);
-	json_object_put(vol_percent);
-	json_object_put(jobj);
-
-// TODO: for compatibility with snapcast, return the result as described in the api
-reply:
-	json_object_object_add(result, "status", json_object_new_boolean(bool_result));
+reply:;
+	json_object *volume = json_object_new_object();
+	if (client) {
+		json_object_object_add(volume, "muted", json_object_new_boolean(client->muted));
+		json_object_object_add(volume, "percent", json_object_new_int(client->volume_percent));
+	}
+	json_object_object_add(result, "volume", volume);
+	jsonrpc_buildresult(response, request->id, result);
 	json_object_print_and_put(fd, response);
+
+	return bool_result;
 }
 
 int handle_request(jsonrpc_request *request, int fd) {
@@ -354,7 +385,11 @@ void socket_client_remove(socket_ctx *ctx, socketclient *sc) {
 }
 
 int handle_line(socketclient *sc) {
+	if (!strnlen(sc->line, LINEBUFFER_SIZE))
+		return false;
+
 	jsonrpc_request jreq = {};
+	log_error("parsing line: %s\n", sc->line);
 	if (!(jsonrpc_parse_string(&jreq, sc->line))) {
 		log_error("parsing unsuccessful for %s\n", sc->line);
 		return false;
@@ -435,6 +470,7 @@ int socket_handle_in(socket_ctx *ctx) {
 	}
 
 	socketclient sc = {.fd = fd, .line_offset = 0, .line[0] = '\0'};
+	memset(sc.line, 0, LINEBUFFER_SIZE);
 	VECTOR_ADD(ctx->clients, sc);
 
 	// TODO: send all relevant notifications to this client.

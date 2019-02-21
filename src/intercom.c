@@ -10,6 +10,7 @@
 #include "clientmgr.h"
 #include "pcmchunk.h"
 
+
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
@@ -105,13 +106,24 @@ int cmp_audiopacket(const audio_packet *ap1, const audio_packet *ap2) {
 	return 0;
 }
 
-int parse_op(uint8_t *packet, uint8_t *op) {
-	packet[1] = 2;
-	return 2;
+int parse_volume(uint8_t *packet, uint8_t *volume) {
+	*volume=packet[2];
+	return packet[1];
 }
 
-int assemble_op(uint8_t *packet, uint32_t nonce, uint8_t op) {
-	packet[0] = op;
+int tlv_get_length(uint8_t *packet) {
+	return packet[1];
+}
+
+int assemble_volume(uint8_t *packet, uint32_t nonce, uint8_t volume) {
+	packet[0] = CLIENT_VOLUME;
+	packet[1] = 3;
+	packet[2] = volume;
+	return packet[1];
+}
+
+int assemble_stop(uint8_t *packet, uint32_t nonce) {
+	packet[0] = CLIENT_STOP;
 	packet[1] = 2;
 	return packet[1];
 }
@@ -239,7 +251,7 @@ bool intercom_handle_server_operation(intercom_ctx *ctx, intercom_packet_sop *pa
 		log_debug("offset: %i %p %p\n", currentoffset, packet, packetpointer);
 		switch (type) {
 			case CLIENT_STOP:
-				currentoffset += parse_op(packetpointer, NULL);
+				currentoffset += tlv_get_length(packetpointer);
 				pcmChunk p;
 				while (ctx->bufferrindex < ctx->bufferwindex) {
 					intercom_getnextaudiochunk(ctx, &p);
@@ -251,6 +263,12 @@ bool intercom_handle_server_operation(intercom_ctx *ctx, intercom_packet_sop *pa
 				memset(ctx->buffer, 0, sizeof(pcmChunk) * ctx->buffer_elements);
 				snapctx.intercom_ctx.lastreceviedseqno = 0;
 				// TODO: should we stop alsa here?
+				break;
+			case CLIENT_VOLUME:;
+				uint8_t volume;
+				currentoffset += parse_volume(packetpointer, &volume);
+				log_error("handling volume change to %d %%\n", volume);
+				adjustVolume(&snapctx.alsaplayer_ctx, volume);
 				break;
 			default:
 				log_error("unknown segment of type %i found in client operation packet. Ignoring this piece\n", type);
@@ -615,7 +633,7 @@ void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
 
 	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
 		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
-		if ( (!c->muted) && c->volume_percent)
+		if (!c->muted)
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, &c->ip, packet, packet_len, c->port);
 	}
 }
@@ -644,14 +662,24 @@ void schedule_hellos(struct intercom_task *data, const int s_timeout, const int 
 	data->check_task = post_task(&snapctx.taskqueue_ctx, s_timeout, ms_timeout, processor, NULL, data);
 }
 
+bool intercom_set_volume(intercom_ctx *ctx, const struct in6_addr *recipient, int port, uint8_t volume) {
+	int packet_len = 0;
+	uint8_t *packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_op));
+
+	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION);
+	packet_len += assemble_volume(&packet[packet_len], get_nonce(), volume);
+
+	intercom_send_packet_unicast(&snapctx.intercom_ctx, recipient, packet, packet_len, port);
+}
+
 bool intercom_stop_client(intercom_ctx *ctx, const struct in6_addr *recipient, int port) {
 	int packet_len = 0;
 	uint8_t *packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_op));
 
 	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION);
-	packet_len += assemble_op(&packet[packet_len], get_nonce(), CLIENT_STOP);
+	packet_len += assemble_stop(&packet[packet_len], get_nonce());
 
-	intercom_send_packet_unicast(&snapctx.intercom_ctx, recipient, packet, packet_len, snapctx.intercom_ctx.serverport);
+	intercom_send_packet_unicast(&snapctx.intercom_ctx, recipient, packet, packet_len, port);
 }
 
 bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int port) {
