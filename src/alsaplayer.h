@@ -82,4 +82,5 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx);
 void init_alsafd();
 uint8_t obtain_volume(alsaplayer_ctx *ctx);
 void alsaplayer_pcm_list();
+void adjustVolume(alsaplayer_ctx *ctx, uint8_t volume);
 bool is_alsafd(const int fd, const alsaplayer_ctx *ctx);

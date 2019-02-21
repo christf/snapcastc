@@ -179,8 +179,6 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	if (!chunk_is_empty(p))  // Do not resample, when chunk contains only silence, save some CPU
 		adjust_speed(p, factor);
 
-	// TODO adjust volume
-
 	log_verbose("status: %d factor: %f chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n",
 		    snapctx.alsaplayer_ctx.playing, factor, p->size, print_timespec(&ctime), print_timespec(&ts), print_timespec(&tdiff.time),
 		    tdiff.sign);
@@ -325,10 +323,10 @@ uint8_t obtain_volume(alsaplayer_ctx *ctx) {
 	snd_mixer_selem_get_playback_volume(ctx->mixer_elem, SND_MIXER_SCHN_MONO, &volume);
 	mixer_uninit(ctx);
 	log_debug("Obtained volume (raw): %lu, Max value (raw): %lu, Volume (percent): %lu\n", volume, ctx->mixer_max, volume * 100 / ctx->mixer_max);
-	return volume * 100 / ctx->mixer_max;
+	return (uint8_t)((int)volume * 100 / ctx->mixer_max);
 }
 
-void adjustVolume(alsaplayer_ctx *ctx, long volume) {
+void adjustVolume(alsaplayer_ctx *ctx, uint8_t volume) {
 	mixer_init(ctx);
 	snd_mixer_selem_set_playback_volume_all(ctx->mixer_elem, volume * ctx->mixer_max / 100);
 	mixer_uninit(ctx);
