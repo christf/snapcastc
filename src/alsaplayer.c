@@ -8,6 +8,8 @@
 #include <rubberband/rubberband-c.h>
 #include <stdio.h>
 
+#include <soxr.h>
+
 #include "timespec.h"
 
 #define PERIOD_TIME 30000
@@ -33,6 +35,25 @@ void adjust_speed_rubber(pcmChunk *chunk, double factor) {
 	chunk->size = outframes * chunk->channels * chunk->frame_size;
 }
 
+void adjust_speed_soxr(pcmChunk *chunk, double factor) {
+	double orate = chunk->samples * factor;
+	size_t olen = (size_t)(chunk->size * orate / chunk->samples + .5);
+	size_t odone;
+
+	uint8_t *out = snap_alloc(factor * chunk->size);
+
+	soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_QQ, 0);   // TODO: make this configurable - Raspi: SOXR_QQ, desktop: SOXR_LQ
+	soxr_io_spec_t io_spec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);  // TODO this should not be hard-coded.
+
+	soxr_error_t error = soxr_oneshot(chunk->samples, orate, chunk->channels, chunk->data, chunk->size / chunk->channels / chunk->frame_size,
+					  NULL, out, olen, &odone, &io_spec, &quality_spec, NULL);
+
+	log_debug("len: %d, olen: %d odone: %d sox-error: %d\n", chunk->size, olen, odone, error);
+	free(chunk->data);
+	chunk->data = out;
+	chunk->size = olen;
+}
+
 void adjust_speed_simple(pcmChunk *chunk, double factor) {
 	// stretch by removing or inserting a single frame at the end of the chunk.
 	// Beware: This reduces ability to sync when larger chunks are used and the logic does not consider the factor at all beyond it being larger
@@ -53,7 +74,8 @@ void adjust_speed_simple(pcmChunk *chunk, double factor) {
 
 void adjust_speed(pcmChunk *chunk, double factor) {
 	// TODO: should we be able to select this via cli option?
-	adjust_speed_simple(chunk, factor);
+	// adjust_speed_simple(chunk, factor);
+	adjust_speed_soxr(chunk, factor);
 }
 
 int max(int a, int b) {
@@ -118,12 +140,17 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	}
 
 	if (!is_near) {
-		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / 1000)));
+
+		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / chunk_getduration_ms(p) )));
+		if (factor > 2)
+			factor = 2;
+		if (factor < 0.5)
+			factor = 0.5;
 
 		// TODO: this factor already works pretty well, however we may end up in a local optimum while just playing one frame less or one
 		// frame more might be optimal.
 
-		not_even_close_ms = max(NOT_EVEN_CLOSE_MS, 2 * chunk_getduration_ms(p));
+		not_even_close_ms = max(NOT_EVEN_CLOSE_MS, chunk_getduration_ms(p) / 2);
 
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
@@ -151,8 +178,6 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 
 	if (!chunk_is_empty(p))  // Do not resample, when chunk contains only silence, save some CPU
 		adjust_speed(p, factor);
-
-	// TODO adjust volume
 
 	log_verbose("status: %d factor: %f chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n",
 		    snapctx.alsaplayer_ctx.playing, factor, p->size, print_timespec(&ctime), print_timespec(&ts), print_timespec(&tdiff.time),
@@ -298,10 +323,10 @@ uint8_t obtain_volume(alsaplayer_ctx *ctx) {
 	snd_mixer_selem_get_playback_volume(ctx->mixer_elem, SND_MIXER_SCHN_MONO, &volume);
 	mixer_uninit(ctx);
 	log_debug("Obtained volume (raw): %lu, Max value (raw): %lu, Volume (percent): %lu\n", volume, ctx->mixer_max, volume * 100 / ctx->mixer_max);
-	return volume * 100 / ctx->mixer_max;
+	return (uint8_t)((int)volume * 100 / ctx->mixer_max);
 }
 
-void adjustVolume(alsaplayer_ctx *ctx, long volume) {
+void adjustVolume(alsaplayer_ctx *ctx, uint8_t volume) {
 	mixer_init(ctx);
 	snd_mixer_selem_set_playback_volume_all(ctx->mixer_elem, volume * ctx->mixer_max / 100);
 	mixer_uninit(ctx);

@@ -25,15 +25,15 @@
    */
 
 #include "alloc.h"
+#include "alsaplayer.h"
 #include "error.h"
+#include "pcmchunk.h"
 #include "snapcast.h"
 #include "syscallwrappers.h"
 #include "types.h"
 #include "util.h"
 #include "vector.h"
 #include "version.h"
-#include "alsaplayer.h"
-#include "pcmchunk.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -46,11 +46,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 #include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 
 snapctx_t snapctx = {};
 
@@ -134,8 +134,8 @@ void catch_sigterm() {
 	sigaction(SIGTERM, &_sigact, NULL);
 }
 
-
 int main(int argc, char *argv[]) {
+	snapctx.operating_mode = CLIENT;
 	snapctx.verbose = false;
 	snapctx.debug = false;
 
@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
 	int c;
-	while ((c = getopt_long(argc, argv, "lVvdhH:p:s:i:c:m:", long_options, &option_index)) != -1) {
+	while ((c = getopt_long(argc, argv, "lVvdhH:p:s:i:L:c:m:", long_options, &option_index)) != -1) {
 		switch (c) {
 			case 'V':
 				printf("snapclient %s\n", SOURCE_VERSION);
@@ -237,6 +237,9 @@ int main(int argc, char *argv[]) {
 			case 'v':
 				snapctx.verbose = true;
 				break;
+			case 'L':
+				snapctx.alsaplayer_ctx.latency_ms = atol(optarg);
+				break;
 			case 'h':
 			default:
 				usage();
@@ -254,7 +257,7 @@ int main(int argc, char *argv[]) {
 	intercom_hello(&snapctx.intercom_ctx, &snapctx.intercom_ctx.serverip, snapctx.intercom_ctx.serverport);
 
 	// we have realtime business when feeding the alsa buffer, setting prio may help on an otherwise busy client.
-	if ( setpriority(PRIO_PROCESS, 0, -5) ) {
+	if (setpriority(PRIO_PROCESS, 0, -5)) {
 		log_error("could not set priority\n");
 	}
 

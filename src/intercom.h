@@ -20,7 +20,7 @@ enum { AUDIO,
        AUDIO_OPUS,
        AUDIO_OGG,
        AUDIO_FLAC };   // TLV type for AUDIO packets, AUDIO will be obsoleted by the more specific types once implemented.
-enum { STREAM_INFO, CLIENT_STOP };  // TLV - types for server op
+enum { STREAM_INFO, CLIENT_STOP, CLIENT_VOLUME };  // TLV - types for server op
 
 typedef struct __attribute__((__packed__)) {
 	uint8_t version;
@@ -44,6 +44,7 @@ typedef struct __attribute__((__packed__)) {
 	uint8_t type;
 	uint8_t length;
 	uint32_t node_id;
+	uint32_t latency;
 	uint8_t volume;
 } tlv_hello;
 
@@ -119,6 +120,7 @@ void intercom_init(intercom_ctx *ctx);
 void intercom_handle_in(intercom_ctx *ctx, int fd);
 bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int port);
 bool intercom_stop_client(intercom_ctx *ctx, const struct in6_addr *recipient, int port);
+bool intercom_set_volume(intercom_ctx *ctx, const struct in6_addr *recipient, int port, uint8_t  volume);
 
 struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx);
 

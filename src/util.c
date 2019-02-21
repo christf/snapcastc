@@ -69,15 +69,20 @@ void add_fd(int efd, int fd, uint32_t events) {
 void del_fd(int efd, int fd) {
 	int s = epoll_ctl(efd, EPOLL_CTL_DEL, fd, NULL);
 	if (s == -1) {
-		perror("epoll_ctl (DEL):");
-		exit_error("epoll_ctl");
+		exit_errno("epoll_ctl (DEL):");
 	}
 }
 
-
-const char* print_chunk(pcmChunk *chunk) {
+const char *print_mac(const uint8_t mac[6]) {
 	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
-	snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "codec: %i play_at: %lu.%09lu", chunk->codec, chunk->play_at_tv_sec, chunk->play_at_tv_nsec);
+	snprintf(strbuffer[str_bufferoffset], 18, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	return strbuffer[str_bufferoffset];
+}
+
+const char *print_chunk(pcmChunk *chunk) {
+	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
+	snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "codec: %i play_at: %lu.%09lu", chunk->codec, chunk->play_at_tv_sec,
+		 chunk->play_at_tv_nsec);
 	return strbuffer[str_bufferoffset];
 }
 

@@ -1,9 +1,9 @@
 #include "clientmgr.h"
 #include "alloc.h"
-#include "snapcast.h"
-#include "util.h"
 #include "intercom.h"
-
+#include "snapcast.h"
+#include "syscallwrappers.h"
+#include "util.h"
 
 #include <netdb.h>
 #include <string.h>
@@ -23,13 +23,39 @@ struct client *findinvector(void *_vector, const uint32_t id) {
 	return NULL;
 }
 
+void clientmgr_send_audio_buffer_to_client(client_t *client) {
+	for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
+		log_error("sending packet %d to %s\n", i, print_ip(&client->ip));
+		audio_packet *ap = &VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, i);
+		intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, ap->data, ap->len, client->port);
+	}
+}
+
+bool clientmgr_client_refreshvolume(client_t *client, uint8_t volume) {
+	intercom_set_volume(&snapctx.intercom_ctx, &client->ip, client->port, volume);
+}
+
+bool clientmgr_client_setmute(client_t *c, bool mute) {
+	bool mute_changed=false;
+	if (c->muted != mute ) {
+		mute_changed = true;
+		c->muted = mute;
+	}
+
+	if (mute)
+		intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
+	else if ( (! mute) && mute_changed)
+		clientmgr_send_audio_buffer_to_client(c);
+
+	return true;
+}
+
 void clientmgr_stop_clients() {
 	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
 		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
 		intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
 	}
 }
-
 
 void schedule_delete_client(void *d) {
 	uint32_t *id = d;
@@ -38,6 +64,8 @@ void schedule_delete_client(void *d) {
 
 client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip, const uint16_t port) {
 	struct sockaddr_in6 speer = {};
+
+	log_verbose("\033[34mADDING client %lu\033[0m\n", id);
 
 	memcpy(&speer.sin6_addr, ip, sizeof(struct in6_addr));
 	speer.sin6_port = port;
@@ -63,9 +91,6 @@ client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip
 	return ret;
 }
 
-void free_client_members(client_t *client) {  // free(client->name);
-}
-
 struct client *get_client(const uint32_t id) {
 	return findinvector(&snapctx.clientmgr_ctx.clients, id);
 }
@@ -89,8 +114,6 @@ void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t id) {
 	log_verbose("\033[34mREMOVING client %lu\033[0m\n", id);
 	print_client(client);
 
-	free_client_members(client);
-
 	// TODO migrate to vector_lsearch
 	for (int i = VECTOR_LEN(ctx->clients) - 1; i >= 0; i--) {
 		if (VECTOR_INDEX(ctx->clients, i).id == id) {
@@ -111,8 +134,23 @@ void clientmgr_purge_clients(clientmgr_ctx *ctx) {
 	}
 }
 
+bool is_roughly(uint8_t a, uint8_t b) {
+	if (a == b)
+		return true;
+	else {
+		int sa = a;
+		int sb = b;
+		if ( abs(sa - sb) < 2)
+			return true;
+	}
+
+	return false;
+}
+
 bool clientmgr_refresh_client(struct client *client) {
 	client_t *existingclient = get_client(client->id);
+	struct timespec ctime;
+	obtainsystime(&ctime);
 
 	if (!existingclient) {
 		// create new client
@@ -120,12 +158,29 @@ bool clientmgr_refresh_client(struct client *client) {
 		client_t n_client = {};
 		new_client(&n_client, client->id, &client->ip, client->port);
 		existingclient = get_client(client->id);
+		client->connected = true;
 
-		// TODO: send intercom buffer to this cli ent
-		for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
-			log_debug("sending packet %d\n",i);
-			audio_packet *ap = &VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, i);
-			intercom_send_packet_unicast(&snapctx.intercom_ctx, &existingclient->ip, ap->data, ap->len, existingclient->port);
+		existingclient->volume_percent = client->volume_percent;
+
+		clientmgr_send_audio_buffer_to_client(existingclient);
+
+		existingclient->protoversion = 2;  // For some reason we have protoversion 2 for clients now.
+
+		// TODO: remove this hack and use actual mac address
+		existingclient->mac[0] = 0xff;
+		existingclient->mac[1] = 0xff;
+		memcpy(&existingclient->mac[2], &client->id, 4);
+	}
+
+	existingclient->connected = true;
+	existingclient->lastseen = ctime;
+
+	if (client) {
+		existingclient->latency = client->latency;
+
+		if (!is_roughly(client->volume_percent, existingclient->volume_percent)) {
+			log_verbose("volume of client %d is not volume of existingclient %d\n", client->volume_percent, existingclient->volume_percent);
+			clientmgr_client_refreshvolume(existingclient, existingclient->volume_percent);
 		}
 	}
 

@@ -25,15 +25,14 @@
 */
 #pragma once
 
-#include "taskqueue.h"
 #include "pcmchunk.h"
+#include "taskqueue.h"
 
 #include <alsa/asoundlib.h>
 #include <stdbool.h>
 #include <sys/types.h>
 
-
-#define NOT_EVEN_CLOSE_MS 250
+#define NOT_EVEN_CLOSE_MS 30
 
 typedef struct {
 	char *name;
@@ -60,7 +59,7 @@ typedef struct {
 	snd_pcm_sw_params_t *swparams;
 
 	snd_mixer_t *mixer_handle;
-	snd_mixer_elem_t* mixer_elem;
+	snd_mixer_elem_t *mixer_elem;
 
 	int pollfd_count;
 	struct pollfd *ufds;
@@ -83,4 +82,5 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx);
 void init_alsafd();
 uint8_t obtain_volume(alsaplayer_ctx *ctx);
 void alsaplayer_pcm_list();
+void adjustVolume(alsaplayer_ctx *ctx, uint8_t volume);
 bool is_alsafd(const int fd, const alsaplayer_ctx *ctx);
