@@ -41,4 +41,4 @@ typedef struct {
 } jsonrpc_response;
 
 void jsonrpc_free_members(jsonrpc_request *req);
-bool jsonrpc_parse_string(jsonrpc_request *result, char *line);
+bool jsonrpc_parse_string(jsonrpc_request *result, const char *line);

@@ -27,29 +27,35 @@ void strcopy_from_json(char **dest, json_object *jobj) {
 	strncpy(*dest, &json_object_to_json_string_ext(jobj, 0)[1], strlen(json_object_to_json_string_ext(jobj, 0)) - 2);
 }
 
-bool jsonrpc_parse_string(jsonrpc_request *result, char *line) {
-	json_object *jobj;
-	json_object *jsonrpc;
-	json_object *method;
-	json_object *params;
-	json_object *id;
+bool jsonrpc_parse_string(jsonrpc_request *result, const char *line) {
+	json_object *jobj = NULL;
+	json_object *jsonrpc = NULL;
+	json_object *method = NULL;
+	json_object *params = NULL;
+	json_object *id = NULL;
 
+	if (!strlen(line))
+		return false;
+
+	log_error("parsing line: %s length %d\n", line, strnlen(line, 1024));
 	jobj = json_tokener_parse(line);
 	if (!jobj) {
 		log_verbose("error parsing json %s\n", line);
-		result = NULL;
 		return false;
 	}
 
 	if (!json_object_object_get_ex(jobj, "jsonrpc", &jsonrpc) || !json_object_object_get_ex(jobj, "method", &method)) {
 		log_verbose("invalid json-rpc structure: jsonrpc or method not found\n");
-		result = NULL;
+		json_object_put(jobj);
+		json_object_put(jsonrpc);
+		json_object_put(method);
 		return false;
 	}
 
 	const char *version = json_object_to_json_string_ext(jsonrpc, 0);
 	if (strncmp("\"2.0\"", version, 5)) {
 		log_verbose("expecting json-rpc Version 2.0\n");
+		json_object_put(jobj);
 		return false;
 	}
 
@@ -108,6 +114,8 @@ bool jsonrpc_parse_string(jsonrpc_request *result, char *line) {
 		} else {
 			log_error("Passing parameters as array is not implemented. Ignoring input.\n");
 			jsonrpc_free_members(result);
+			json_object_put(jobj);
+			json_object_put(params);
 			return false;
 		}
 	}
