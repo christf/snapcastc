@@ -30,6 +30,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+enum operatingmode { CLIENT, SERVER };
+
 struct snapctx {
 	char *servername;  // snapcast server
 	char *selfname;
@@ -53,6 +55,8 @@ struct snapctx {
 	size_t readms;
 
 	uint16_t socketport;
+
+	enum operatingmode operating_mode;
 
 	bool debug;
 	bool verbose;

@@ -135,6 +135,7 @@ void catch_sigterm() {
 }
 
 int main(int argc, char *argv[]) {
+	snapctx.operating_mode = CLIENT;
 	snapctx.verbose = false;
 	snapctx.debug = false;
 
