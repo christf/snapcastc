@@ -1,0 +1,10 @@
+#!/bin/bash
+# this script will mute a client:
+# ./snapclient_mute <clientid> true|false
+
+ID=$1
+STATUS=$2
+SERVER=$3
+port=1705
+echo "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Client.SetVolume\",\"params\":{\"id\":$ID, \"volume\":{\"muted\":$STATUS}}}" | telnet $SERVER $port
+

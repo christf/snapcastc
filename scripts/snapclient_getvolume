@@ -1,0 +1,10 @@
+#!/bin/bash
+# This will obtain the volume of a given client. This script must be called with two parameters: server and id of the client to 
+# ./snapclient_getvolume mediaserver.lan 5
+
+clientid=$1
+server=$2
+port=1705
+
+(echo "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Server.GetStatus}\"}}"; sleep 1 ) | telnet $server $port| sed '1,3d'| jq ".result.server.groups[].clients[] | select(.id==$clientid) | .config.volume.percent"
+
