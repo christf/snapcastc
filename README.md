@@ -194,7 +194,7 @@ Define n_Lautstaerke_Wohnzimmer notify Lautstaerke_Wohnzimmer {system("/usr/loca
 
 
 
-# Collaboation
+# Collaboration
 ## Improvements welcome!
 
 Help is much appreciated. Be it testing and opening specific issues, or 
