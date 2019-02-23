@@ -134,7 +134,9 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	}
 
 	if (!is_near) {
-		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / chunk_getduration_ms(p))));
+
+		if (chunk_getduration_ms(p))
+			factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / chunk_getduration_ms(p))));
 		if (factor > 2)
 			factor = 2;
 		if (factor < 0.5)
