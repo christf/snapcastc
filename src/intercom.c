@@ -10,7 +10,6 @@
 #include "clientmgr.h"
 #include "pcmchunk.h"
 
-
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
@@ -55,12 +54,15 @@ void copy_intercom_task(struct intercom_task *old, struct intercom_task *new) {
 	new->retries_left = old->retries_left;
 }
 
-void realloc_intercom_buffer_when_required(intercom_ctx *ctx, int serverbufferms) {
-	if (serverbufferms / snapctx.readms != ctx->buffer_elements) {
-		log_error("Adjusting local buffer size to %d ms\n", serverbufferms);
+void realloc_intercom_buffer_when_required(intercom_ctx *ctx, int serverbufferms, size_t chunk_ms) {
+	// should we be able to do this when retaining the content of the buffer?
+	size_t calculated_elements = serverbufferms / chunk_ms + 1;
+	if (calculated_elements != ctx->buffer_elements) {
+		log_verbose("Adjusting local buffer size to %d ms/%d elements. Previous size: %d ms of data in %d elements.\n", serverbufferms,
+			    calculated_elements, chunk_ms, ctx->buffer_elements);
 		free(ctx->buffer);
 		ctx->bufferrindex = ctx->bufferwindex = 0;
-		ctx->buffer_elements = serverbufferms / snapctx.readms;
+		ctx->buffer_elements = calculated_elements;
 		ctx->buffer = snap_alloc(sizeof(pcmChunk) * ctx->buffer_elements);
 		memset(ctx->buffer, 0, sizeof(pcmChunk) * ctx->buffer_elements);
 		snapctx.bufferms = serverbufferms;
@@ -86,8 +88,6 @@ void intercom_init(intercom_ctx *ctx) {
 		perror("bind socket to node-IP failed");
 		exit(EXIT_FAILURE);
 	}
-
-	realloc_intercom_buffer_when_required(ctx, snapctx.bufferms);
 }
 
 int assemble_header(intercom_packet_hdr *hdr, uint8_t type) {
@@ -107,13 +107,11 @@ int cmp_audiopacket(const audio_packet *ap1, const audio_packet *ap2) {
 }
 
 int parse_volume(uint8_t *packet, uint8_t *volume) {
-	*volume=packet[2];
+	*volume = packet[2];
 	return packet[1];
 }
 
-int tlv_get_length(uint8_t *packet) {
-	return packet[1];
-}
+int tlv_get_length(uint8_t *packet) { return packet[1]; }
 
 int assemble_volume(uint8_t *packet, uint32_t nonce, uint8_t volume) {
 	packet[0] = CLIENT_VOLUME;
@@ -458,8 +456,6 @@ bool is_next_chunk(uint32_t seq) {
 
 bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int packet_len) {
 	// TODO: Implementing TLV format for audio data will de-couple readms from the packet size.
-	realloc_intercom_buffer_when_required(ctx, ntohs(packet->bufferms));
-
 	uint8_t *packetpointer = &((uint8_t *)packet)[sizeof(intercom_packet_audio)];
 
 	pcmChunk chunk;
@@ -473,6 +469,12 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 	memcpy(chunk.data, &((uint8_t *)packet)[currentoffset], chunk.size);
 
 	size_t this_seqno = ntohl(packet->hdr.nonce);
+
+	// when buffer is empty, it may not have been initialized and thus the server may have adjusted its chunk size.
+	if (ctx->bufferwindex == ctx->bufferrindex) {
+		chunk_decode(&chunk);
+		realloc_intercom_buffer_when_required(ctx, ntohs(packet->bufferms), chunk_getduration_ms(&chunk));
+	}
 
 	log_debug("read chunk from packet: %d samples: %d frame size:%d  channels: %d packet_len: %d, hdrsize: %d\n\n", chunk.size, chunk.samples,
 		  chunk.frame_size, chunk.channels, packet_len, sizeof(intercom_packet_audio));

@@ -87,10 +87,7 @@ int max(int a, int b) {
 void decode_first_input(void *d) {
 	pcmChunk *p;
 	intercom_peeknextaudiochunk(&snapctx.intercom_ctx, &p);
-	if (p->codec == CODEC_OPUS) {
-		log_verbose("Decoding opus data for chunk that is to be played next.\n");
-		decode_opus_handle(p);
-	}
+	chunk_decode(p);
 }
 
 int getchunk(pcmChunk *p, size_t delay_frames) {
@@ -125,10 +122,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
 					(int)(1.2 * snapctx.bufferms) % 1000);
 
-			if (p->codec == CODEC_OPUS) {
-				log_error("Decoding opus data for chunk in getchunk(), this should only happen rarely.\n");
-				decode_opus_handle(p);
-			}
+			chunk_decode(p);
 			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
 		}
 	} else
@@ -140,8 +134,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	}
 
 	if (!is_near) {
-
-		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / chunk_getduration_ms(p) )));
+		factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / chunk_getduration_ms(p))));
 		if (factor > 2)
 			factor = 2;
 		if (factor < 0.5)

@@ -1,12 +1,12 @@
 #include "pcmchunk.h"
 #include "alloc.h"
+#include "opuscodec.h"
 #include "snapcast.h"
 #include "util.h"
 
-#include "timespec.h"
-
 #include <arpa/inet.h>
 #include <time.h>
+#include "timespec.h"
 
 void get_emptychunk(pcmChunk *ret) {
 	struct timespec t = {};
@@ -25,6 +25,13 @@ void get_emptychunk(pcmChunk *ret) {
 int chunk_getduration_ms(pcmChunk *chunk) { return 1000 * chunk->size / chunk->channels / chunk->frame_size / chunk->samples; }
 
 bool chunk_is_empty(pcmChunk *c) { return !(c->play_at_tv_sec > 0); }
+
+bool chunk_decode(pcmChunk *c) {
+	if (c->codec == CODEC_OPUS) {
+		log_verbose("Decoding opus data for chunk\n");
+		decode_opus_handle(c);
+	}
+}
 
 void chunk_ntoh(pcmChunk *chunk) {
 	chunk->play_at_tv_sec = ntohl(chunk->play_at_tv_sec);
