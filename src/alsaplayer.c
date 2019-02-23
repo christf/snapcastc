@@ -162,7 +162,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 					log_error("we are behind by %s seconds: dropping this chunk!\n", print_timespec(&tdiff.time));
 					p->size = 0;
 					p->play_at_tv_sec = 0;
-					free(p->data);
+					chunk_free_members(p);
 					return -1;
 				} else {
 					log_error(" playing empty chunk\n");
@@ -202,6 +202,11 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	if (ret == 0) {
 		log_error("end of data\n");
 	} else if (ret == -1) {  // dropping chunk
+		return;
+	}
+
+	if (! ( chunk.channels && chunk.frame_size && chunk.size) ) {
+		log_error("retrieved zero chunk, not writing to alsa device\n");
 		return;
 	}
 
