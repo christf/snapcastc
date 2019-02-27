@@ -54,12 +54,12 @@ mpd.conf. Also, make sure that the snapfifo is created using mkfifo and
 snapcastc as well as mpd have permission to access it.
 
 ```
-Audio_output {
-        Type            "pipe"
-        Name            "snapcast"
-        Command         "cat >/tmp/snapfifo"
-        Format          "48000:16:2"
-        Auto_resample   "no"
+audio_output {
+        type            "pipe"
+        name            "snapcast"
+        command         "cat >/tmp/snapfifo"
+        format          "48000:16:2"
+        auto_resample   "no"
 }
 ```
 
