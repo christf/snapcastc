@@ -109,6 +109,9 @@ snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default
 
 ## Status and Roadmap
 
+[![Build Status](https://api.travis-ci.org/christf/snapcastc.svg?branch=master)](https://travis-ci.org/christf/snapcastc)
+
+
 * Audio Playback [Working]
 * Usage of UDP for transporting media data [Working]
 * Support for Opus [Working]
