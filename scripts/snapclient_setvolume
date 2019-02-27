@@ -1,0 +1,10 @@
+#!/bin/bash
+# This script will set the volume of client with a given id on the snapcast streaming server.
+# It is to be called like this:
+# ./snapclient_setvolume <clientid> <volume_percent> <server>
+# ./snapclient_setvolume 4 40 snapcastserver.lan << will set the volume for client 4 to 40%.
+clientid=$1
+volume=$2
+server=$3
+port=1705
+(echo "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Client.SetVolume\",\"params\":{\"id\":$clientid, \"volume\":{\"muted\":false, \"percent\":$volume}}}";) | telnet $server $port| sed '1,3d'| jq .

@@ -110,11 +110,10 @@ void json_add_group(json_object *out) {
 		json_object_object_add(client, "connected", json_object_new_boolean(c->connected));
 
 		json_object *host = json_object_new_object();
-		// json_build_host(host, "unknown", print_ip(&c->ip), print_mac(c->mac), "", "unknown");
-		json_build_host(host, "unknown", "::ffff:192.168.13.153", "60:57:18:88:d7:f9", "lappi", "Linux");
+		json_build_host(host, "unknown", print_ip(&c->ip), print_mac(c->mac), c->name, "unknown");
 		json_object_object_add(client, "host", host);
 
-		json_object_object_add(client, "id", json_object_new_string("lappi"));
+		json_object_object_add(client, "id", json_object_new_int(c->id));
 
 		json_object *lastseen = json_object_new_object();
 		json_add_time(lastseen, &c->lastseen);

@@ -154,7 +154,47 @@ to build and install the program.
   REQUEST missing packets from the server
 
 
-# Collaboation
+# FHEM Integration
+
+To integrate SnapCastC with fhem mute button and volume sliders can be defined:
+The two snapcast clients are started using -i 2 and -i 3 respectively to hard-code their ID.
+```
+define Musik_Wohnzimmer dummy
+Attr Musik_Wohnzimmer devStateIcon on:audio_volume_high off:audio_volume_mute .on:audio_volume_high
+Attr Musik_Wohnzimmer icon audio_volume
+Attr Musik_Wohnzimmer room Musik
+Attr Musik_Wohnzimmer setList on off
+Define off_Musik_Wohnzimmer notify Musik_Wohnzimmer:off {system("snapclient_mute 3 true")}
+Define on_Musik_Wohnzimmer notify Musik_Wohnzimmer:on {system("snapclient_mute 3 false")}
+
+Define Musik_Kueche dummy
+Attr Musik_Kueche devStateIcon on:audio_volume_high off:audio_volume_mute
+Attr Musik_Kueche room Musik
+Attr Musik_Kueche setList on off
+Define off_Musik_Kueche notify Musik_Kueche:off {system("snapclient_mute 2 true")}
+Define on_Musik_Kueche notify Musik_Kueche:on {system("snapclient_mute 2 false")}
+
+Define Lautstaerke_Kueche dummy
+Attr Lautstaerke_Kueche icon audio_audio
+Attr Lautstaerke_Kueche readingList state
+Attr Lautstaerke_Kueche room Musik
+Attr Lautstaerke_Kueche setList state:slider,0,2,100
+Attr Lautstaerke_Kueche webCmd state
+Define n_Lautstaerke_Kueche notify Lautstaerke_Kueche {system("/usr/local/bin/snapclient_setvolume 2 $EVENT")}
+
+Define Lautstaerke_Wohnzimmer dummy
+Attr Lautstaerke_Wohnzimmer icon audio_audio
+Attr Lautstaerke_Wohnzimmer readingList state
+Attr Lautstaerke_Wohnzimmer room Musik
+Attr Lautstaerke_Wohnzimmer setList state:slider,0,2,100
+Attr Lautstaerke_Wohnzimmer webCmd state
+Define n_Lautstaerke_Wohnzimmer notify Lautstaerke_Wohnzimmer {system("/usr/local/bin/snapclient_setvolume 3 $EVENT")}
+
+```
+
+
+
+# Collaboration
 ## Improvements welcome!
 
 Help is much appreciated. Be it testing and opening specific issues, or 
