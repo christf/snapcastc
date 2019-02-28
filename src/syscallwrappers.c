@@ -5,6 +5,7 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <linux/random.h>
 
 void obtainsystime(struct timespec *ts) {
 	struct timeval currenttime;

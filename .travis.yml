@@ -1,0 +1,18 @@
+language: c
+
+services:
+    - docker
+
+compiler:
+    - gcc
+
+before_install:
+    - docker build -t christf/snapcastc-build .
+
+#before_script:  
+#    - mkdir build
+#    - cd build
+#    - cmake --trace ..
+#
+script:
+    - docker run -v $(pwd):/project -a STDOUT -a STDERR christf/snapcastc-build /bin/sh -c "cd /project; mkdir build; cd build; gcc --version ;cmake .. ; make -j5"
