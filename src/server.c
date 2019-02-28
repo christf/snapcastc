@@ -30,6 +30,7 @@
 #include "opuscodec.h"
 #include "snapcast.h"
 #include "socket.h"
+#include "stream.h"
 #include "types.h"
 #include "util.h"
 #include "vector.h"
@@ -62,8 +63,27 @@ void sig_term_handler(int signum, siginfo_t *info, void *ptr) {
 
 void resume_read(void *d) {
 	log_debug("resuming reading from pipe\n");
-	int *efd = d;
-	add_fd(*efd, snapctx.inputpipe_ctx.fd, EPOLLIN);
+	streamtask *st = (streamtask *)d;
+	add_fd(st->efd, st->fd, EPOLLIN);
+}
+
+stream *find_stream(int fd) {
+	for (int i = VECTOR_LEN(snapctx.streams) - 1; i >= 0; --i) {
+		stream *s = &VECTOR_INDEX(snapctx.streams, i);
+		if (fd == s->inputpipe.fd)
+			return s;
+	}
+	return NULL;
+}
+
+bool is_inputpipe(int fd) {
+	for (int i = VECTOR_LEN(snapctx.streams) - 1; i >= 0; --i) {
+		stream *s = &VECTOR_INDEX(snapctx.streams, i);
+		if (fd == s->inputpipe.fd) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void loop() {
@@ -79,7 +99,13 @@ void loop() {
 
 	snapctx.efd = efd;
 	add_fd(efd, snapctx.taskqueue_ctx.fd, EPOLLIN);
-	add_fd(efd, snapctx.inputpipe_ctx.fd, EPOLLIN);
+
+	for (int i = VECTOR_LEN(snapctx.streams) - 1; i >= 0; --i) {
+		stream *s = &VECTOR_INDEX(snapctx.streams, i);
+		log_verbose("epoll on input stream %s\n", s->inputpipe.fname);
+		add_fd(efd, s->inputpipe.fd, EPOLLIN);
+	}
+
 	add_fd(efd, snapctx.intercom_ctx.fd, EPOLLIN);
 	add_fd(efd, snapctx.socket_ctx.fd, EPOLLIN);
 
@@ -96,16 +122,18 @@ void loop() {
 				snprintf(strbuf, 512, "epoll error received on fd %i", events[i].data.fd);
 				perror(strbuf);
 
-				if ((snapctx.inputpipe_ctx.fd == events[i].data.fd)) {
+				if (is_inputpipe(events[i].data.fd)) {
 					log_error("input pipe was closed (mpd stopped?). Re-initializing-.\n");
 					perror("received signal was");
-					del_fd(efd, snapctx.inputpipe_ctx.fd);
-					inputpipe_uninit(&snapctx.inputpipe_ctx);
+					del_fd(efd, events[i].data.fd);
 
-					clientmgr_stop_clients();
+					stream *s = find_stream(events[i].data.fd);
+					inputpipe_uninit(&s->inputpipe);
 
-					inputpipe_init(&snapctx.inputpipe_ctx);
-					add_fd(efd, snapctx.inputpipe_ctx.fd, EPOLLIN);
+					clientmgr_stop_clients_for_stream(s);
+
+					inputpipe_init(&s->inputpipe);
+					add_fd(efd, s->inputpipe.fd, EPOLLIN);
 				} else if (socket_get_client(&snapctx.socket_ctx, NULL, events[i].data.fd)) {
 					log_error("error received on one of the socket clients. Closing %d\n", events[i].data.fd);
 					socketclient *sc = NULL;
@@ -116,17 +144,23 @@ void loop() {
 					sig_term_handler(0, 0, 0);
 			} else if ((snapctx.taskqueue_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				taskqueue_run(&snapctx.taskqueue_ctx);
-			} else if ((snapctx.inputpipe_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
-				int ret = inputpipe_handle(&snapctx.inputpipe_ctx);
+			} else if (is_inputpipe(events[i].data.fd) && (events[i].events & EPOLLIN)) {
+				stream *s = find_stream(events[i].data.fd);
+				int ret = inputpipe_handle(&s->inputpipe);
 				if (ret == -1) {
-					del_fd(efd, snapctx.inputpipe_ctx.fd);
+					del_fd(efd, events[i].data.fd);
 					log_debug("throttling input from fifo, resuming read in %d ms\n", snapctx.readms);
-					post_task(&snapctx.taskqueue_ctx, snapctx.readms / 1000, snapctx.readms % 1000, resume_read, NULL, &efd);
+
+					streamtask *st = snap_alloc(sizeof(streamtask));
+					st->efd = efd;
+					st->fd = events[i].data.fd;
+
+					post_task(&snapctx.taskqueue_ctx, snapctx.readms / 1000, snapctx.readms % 1000, resume_read, free, st);
 				} else if (ret == 1) {
 					// TODO: only encode when there is at least one client to save CPU cycles
-					encode_opus_handle(&snapctx.inputpipe_ctx.chunk);
-					intercom_send_audio(&snapctx.intercom_ctx, &snapctx.inputpipe_ctx.chunk);
-					print_packet(snapctx.inputpipe_ctx.chunk.data, snapctx.inputpipe_ctx.chunk.size);
+					encode_opus_handle(&s->inputpipe.chunk);
+					intercom_send_audio(&snapctx.intercom_ctx, &s->inputpipe.chunk);
+					print_packet(s->inputpipe.chunk.data, s->inputpipe.chunk.size);
 				}
 			} else if ((snapctx.intercom_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				intercom_handle_in(&snapctx.intercom_ctx, events[i].data.fd);
@@ -137,15 +171,14 @@ void loop() {
 				}
 			} else if (socket_get_client(&snapctx.socket_ctx, NULL, events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				socketclient *sc = NULL;
-				if ( socket_get_client(&snapctx.socket_ctx, &sc, events[i].data.fd)) {
+				if (socket_get_client(&snapctx.socket_ctx, &sc, events[i].data.fd)) {
 					if (socket_handle_client(&snapctx.socket_ctx, sc) < 0) {
 						log_error("closing client: %d\n", sc->fd);
 						del_fd(efd, sc->fd);
 						socket_client_remove(&snapctx.socket_ctx, sc);
 					}
-				}
-				else {
-					log_error("socketclient with fd %d not found\n",  events[i].data.fd);
+				} else {
+					log_error("socketclient with fd %d not found\n", events[i].data.fd);
 				}
 			} else {
 				if (events[i].events == EPOLLIN) {
@@ -202,6 +235,7 @@ int main(int argc, char *argv[]) {
 	snapctx.readms = 5;			// set default
 	snapctx.opuscodec_ctx.bitrate = 96000;  // set default
 	snapctx.socketport = 1705;
+	VECTOR_INIT(snapctx.streams);
 
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
@@ -235,10 +269,13 @@ int main(int argc, char *argv[]) {
 			case 'b':
 				snapctx.bufferms = atoi(optarg);
 				break;
-			case 's':
+			case 's':  // TODO: parse option string for stream: TYPE://host/path name=NAME\n[&codec=CODEC]\n[&sampleformat=SAMPLEFORMAT]
 				input = true;
-				snapctx.inputpipe_ctx.fname = strdupa(optarg);
-				inputpipe_init(&snapctx.inputpipe_ctx);
+				stream s = {};
+				snprintf(s.name, STREAM_NAME_LENGTH, "default");
+				s.inputpipe.fname = strdupa(optarg);
+				inputpipe_init(&s.inputpipe);
+				VECTOR_ADD(snapctx.streams, s);
 				break;
 			case 'h':
 			default:

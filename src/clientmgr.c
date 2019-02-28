@@ -2,6 +2,7 @@
 #include "alloc.h"
 #include "intercom.h"
 #include "snapcast.h"
+#include "stream.h"
 #include "syscallwrappers.h"
 #include "util.h"
 
@@ -36,18 +37,26 @@ bool clientmgr_client_refreshvolume(client_t *client, uint8_t volume) {
 }
 
 bool clientmgr_client_setmute(client_t *c, bool mute) {
-	bool mute_changed=false;
-	if (c->muted != mute ) {
+	bool mute_changed = false;
+	if (c->muted != mute) {
 		mute_changed = true;
 		c->muted = mute;
 	}
 
 	if (mute)
 		intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
-	else if ( (! mute) && mute_changed)
+	else if ((!mute) && mute_changed)
 		clientmgr_send_audio_buffer_to_client(c);
 
 	return true;
+}
+
+void clientmgr_stop_clients_for_stream(stream *s) {
+	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
+		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
+		if (c->stream == s)
+			intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
+	}
 }
 
 void clientmgr_stop_clients() {
@@ -140,7 +149,7 @@ bool is_roughly(uint8_t a, uint8_t b) {
 	else {
 		int sa = a;
 		int sb = b;
-		if ( abs(sa - sb) < 2)
+		if (abs(sa - sb) < 2)
 			return true;
 	}
 
@@ -159,6 +168,8 @@ bool clientmgr_refresh_client(struct client *client) {
 		new_client(&n_client, client->id, &client->ip, client->port);
 		existingclient = get_client(client->id);
 		client->connected = true;
+
+		existingclient->stream = &VECTOR_INDEX(snapctx.streams, 0);
 
 		existingclient->volume_percent = client->volume_percent;
 
@@ -179,7 +190,8 @@ bool clientmgr_refresh_client(struct client *client) {
 		existingclient->latency = client->latency;
 
 		if (!is_roughly(client->volume_percent, existingclient->volume_percent)) {
-			log_verbose("volume of client %d is not volume of existingclient %d\n", client->volume_percent, existingclient->volume_percent);
+			log_verbose("volume of client %d is not volume of existingclient %d\n", client->volume_percent,
+				    existingclient->volume_percent);
 			clientmgr_client_refreshvolume(existingclient, existingclient->volume_percent);
 		}
 	}

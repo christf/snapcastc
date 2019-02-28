@@ -3,6 +3,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/time.h>
+#include "stream.h"
 #include "taskqueue.h"
 #include "vector.h"
 
@@ -25,6 +26,8 @@ typedef struct client {
 
 	uint8_t volume_percent;
 	bool muted;
+
+	stream *stream;
 
 	taskqueue_t *purge_task;
 } client_t;
@@ -49,6 +52,7 @@ void print_client(struct client *client);
 bool clientmgr_refresh_client(struct client *client);
 void clientmgr_purge_clients(clientmgr_ctx *ctx);
 void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t clientid);
+void clientmgr_stop_clients_for_stream(stream *s);
 void clientmgr_stop_clients();
 bool clientmgr_client_setmute(client_t *client, bool mute);
 bool clientmgr_client_refreshvolume(client_t *client, uint8_t volume);
