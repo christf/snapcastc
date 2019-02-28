@@ -33,7 +33,7 @@ target_link_libraries(snapcast-client ${ALSA_LIBRARIES})
 set_target_properties(snapcast-client PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "")
 set_target_properties(snapcast-server PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "")
 
-# install(TARGETS snapcast-client RUNTIME DESTINATION bin)
+install(TARGETS snapcast-client RUNTIME DESTINATION bin)
 install(TARGETS snapcast-server RUNTIME DESTINATION bin)
 
 # Get the current working branch
