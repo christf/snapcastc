@@ -270,9 +270,24 @@ int main(int argc, char *argv[]) {
 				snapctx.bufferms = atoi(optarg);
 				break;
 			case 's':  // TODO: parse option string for stream: TYPE://host/path name=NAME\n[&codec=CODEC]\n[&sampleformat=SAMPLEFORMAT]
+				// "raw": "pipe:////tmp/snapfifo?buffer_ms=20&codec=pcm&name=default&sampleformat=48000:16:2&timeout_ms=1000",
 				input = true;
 				stream s = {};
 				snprintf(s.name, STREAM_NAME_LENGTH, "default");
+
+
+				char protocol[64];
+				for (int i=0; i<strlen(optarg); ++i) {
+					if (!strncmp(optarg[i], "://", 3)) {
+						strncpy(protocol, optarg, i);
+					}
+					protocol[i] = 0;
+				}
+
+		// json_object_object_add(query, "sampleformat", json_object_new_string("48000:16:2"));
+		// json_object_object_add(query, "buffer_ms", json_object_new_string("20"));
+		// json_object_object_add(uri, "scheme", json_object_new_string("pipe"));
+				s.raw = strdupa(optarg);
 				s.inputpipe.fname = strdupa(optarg);
 				inputpipe_init(&s.inputpipe);
 				VECTOR_ADD(snapctx.streams, s);

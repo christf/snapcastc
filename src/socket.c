@@ -148,65 +148,40 @@ void json_add_groups(json_object *out) {
 }
 
 void json_build_serverstatus_streams(json_object *in) {
-	/* TODO IMPLEMENT THIS FUNCTION  - after implementing the data model
-	** for streams
-	"streams": [
-	{
-		"id": "default",
-			"meta": {
-				"STREAM": "default"
-			},
-			"status": "idle",
-			"uri": {
-				"fragment": "",
-				"host": "",
-				"path": "/tmp/snapfifo",
-				"query": {
-					"buffer_ms": "20",
-					"codec": "pcm",
-					"name": "default",
-					"sampleformat": "48000:16:2",
-					"timeout_ms": "1000"
-				},
-				"raw": "pipe:////tmp/snapfifo?buffer_ms=20&codec=pcm&name=default&sampleformat=48000:16:2&timeout_ms=1000",
-				"scheme": "pipe"
-			}
-	}
-	]
-	*/
-
+	// "raw": "pipe:////tmp/snapfifo?buffer_ms=20&codec=pcm&name=default&sampleformat=48000:16:2&timeout_ms=1000",
 	json_object *streams = json_object_new_array();
 
-	// for i in streams
+	for (int i = VECTOR_LEN(snapctx.streams) - 1; i >= 0; --i) {
+		stream *s = &VECTOR_INDEX(snapctx.streams, i);
 
-	json_object *stream = json_object_new_object();
-	json_object *meta = json_object_new_object();
-	json_object *uri = json_object_new_object();
-	json_object *query = json_object_new_object();
-	json_object_object_add(stream, "id", json_object_new_string("default"));
-	json_object_object_add(meta, "STREAM", json_object_new_string("default"));
-	json_object_object_add(stream, "meta", meta);
-	json_object_object_add(stream, "status", json_object_new_string("idle"));
+		json_object *stream = json_object_new_object();
+		json_object *meta = json_object_new_object();
+		json_object *uri = json_object_new_object();
+		json_object *query = json_object_new_object();
+		json_object_object_add(stream, "id", json_object_new_string(s->name));
+		json_object_object_add(meta, "STREAM", json_object_new_string(s->name));
+		json_object_object_add(stream, "meta", meta);
+		json_object_object_add(stream, "status", json_object_new_string(print_inputpipe_status(s->inputpipe.state)));
 
-	json_object_object_add(stream, "uri", uri);
-	json_object_object_add(uri, "fragment", json_object_new_string(""));
-	json_object_object_add(uri, "host", json_object_new_string(""));
-	json_object_object_add(uri, "path", json_object_new_string("/tmp/snapfifo"));
+		json_object_object_add(stream, "uri", uri);
+		json_object_object_add(uri, "fragment", json_object_new_string(""));
+		json_object_object_add(uri, "host", json_object_new_string(""));
+		json_object_object_add(uri, "path", json_object_new_string(s->inputpipe.fname));
 
-	json_object_object_add(query, "buffer_ms", json_object_new_string("20"));
-	json_object_object_add(query, "codec", json_object_new_string("ogg"));
-	json_object_object_add(query, "name", json_object_new_string("default"));
-	json_object_object_add(query, "sampleformat", json_object_new_string("48000:16:2"));
-	json_object_object_add(query, "timeout_ms", json_object_new_string("1000"));
-	json_object_object_add(uri, "query", query);
+		json_object_object_add(query, "buffer_ms", json_object_new_string("20"));
+		json_object_object_add(query, "codec", json_object_new_string(print_codec(s->codec)));
+		json_object_object_add(query, "name", json_object_new_string(s->name));  // the object contains s->name a lot
+		json_object_object_add(query, "sampleformat", json_object_new_string("48000:16:2"));
+		json_object_object_add(query, "timeout_ms", json_object_new_int(s->inputpipe.pipelength_ms));
+		json_object_object_add(uri, "query", query);
 
-	json_object_object_add(
-	    uri, "raw", json_object_new_string("pipe:////tmp/snapfifo?buffer_ms=20&codec=ogg&name=default&sampleformat=48000:16:2&timeout_ms=1000"));
-	json_object_object_add(uri, "scheme", json_object_new_string("pipe"));
+		json_object_object_add(uri, "raw", json_object_new_string(s->raw));
+		json_object_object_add(uri, "scheme", json_object_new_string("pipe"));
 
-	json_object_array_add(streams, stream);
+		json_object_array_add(streams, stream);
 
-	json_object_object_add(in, "streams", streams);  // streams - this is at the very least poorly named
+		json_object_object_add(in, "streams", streams);  // streams - this is at the very least poorly named
+	}
 }
 
 void json_build_serverstatus_server(json_object *in) {

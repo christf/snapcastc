@@ -79,6 +79,31 @@ const char *print_mac(const uint8_t mac[6]) {
 	return strbuffer[str_bufferoffset];
 }
 
+const char *print_codec(int codec) {
+	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
+	if (codec == 0)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "pcm");
+	else if (codec == 1)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "opus");
+	else
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "unknown");
+	return strbuffer[str_bufferoffset];
+}
+
+const char *print_inputpipe_status(int status) {
+	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
+	if (status == IDLE)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "idle");
+	else if (status == PLAYING)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "playing");
+	else if (status == THROTTLE)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "throttle");
+	else
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "unknown");
+
+	return strbuffer[str_bufferoffset];
+}
+
 const char *print_chunk(pcmChunk *chunk) {
 	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
 	snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "codec: %i play_at: %lu.%09lu", chunk->codec, chunk->play_at_tv_sec,
