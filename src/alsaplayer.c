@@ -287,9 +287,11 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	ctx->initialized = ctx->playing = false;
 	free(ctx->ufds);
 
-	for (int i = 0; i < ctx->pollfd_count; ++i) {
-		ctx->main_poll_fd[i].fd = -(ctx->main_poll_fd[i]).fd;
-	}
+	if (ctx->main_poll_fd)
+		for (int i = 0; i < ctx->pollfd_count; ++i) {
+			log_verbose("uninitializing alsa fd %d on index %d\n", ctx->main_poll_fd[i].fd, i);
+			ctx->main_poll_fd[i].fd = -(ctx->main_poll_fd[i]).fd;
+		}
 }
 
 void init_alsafd(alsaplayer_ctx *ctx) {
@@ -348,6 +350,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	if (ctx->initialized)
 		return;
 
+	log_verbose("initializing alsa\n");
 	ctx->close_task = post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms * 1.2) / 1000, (int)(snapctx.bufferms * 1.2) % 1000,
 				    alsaplayer_uninit_task, NULL, NULL);
 
