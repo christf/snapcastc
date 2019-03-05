@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <sys/epoll.h>
 
-#define STRBUFELEMENTS 3
+#define STRBUFELEMENTS 4
 static char strbuffer[STRBUFELEMENTS][INET6_ADDRSTRLEN + 1];
 static int str_bufferoffset = 0;
 
@@ -81,10 +81,19 @@ const char *print_mac(const uint8_t mac[6]) {
 
 const char *print_codec(int codec) {
 	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
-	if (codec == 0)
+	if (codec == PCM)
 		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "pcm");
-	else if (codec == 1)
+	else if (codec == OPUS)
 		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "opus");
+	else
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "unknown");
+	return strbuffer[str_bufferoffset];
+}
+
+const char *print_stream_protocol(int protocol) {
+	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
+	if (protocol == PIPE)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "pipe");
 	else
 		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "unknown");
 	return strbuffer[str_bufferoffset];

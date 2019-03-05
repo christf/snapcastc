@@ -122,7 +122,7 @@ void json_add_group(json_object *out) {
 		json_object *snapclient = json_object_new_object();
 		json_object_object_add(snapclient, "name", json_object_new_string("Snapclient"));
 		json_object_object_add(snapclient, "protocolVersion", json_object_new_int(c->protoversion));
-		json_object_object_add(snapclient, "version", json_object_new_string("0.15.0"));
+		json_object_object_add(snapclient, "version", json_object_new_string("unknown"));
 
 		json_object_object_add(client, "snapclient", snapclient);
 
@@ -168,15 +168,17 @@ void json_build_serverstatus_streams(json_object *in) {
 		json_object_object_add(uri, "host", json_object_new_string(""));
 		json_object_object_add(uri, "path", json_object_new_string(s->inputpipe.fname));
 
-		json_object_object_add(query, "buffer_ms", json_object_new_string("20"));
+		json_object_object_add(query, "buffer_ms", json_object_new_int(s->inputpipe.read_ms));
 		json_object_object_add(query, "codec", json_object_new_string(print_codec(s->codec)));
 		json_object_object_add(query, "name", json_object_new_string(s->name));  // the object contains s->name a lot
-		json_object_object_add(query, "sampleformat", json_object_new_string("48000:16:2"));
+		char streamformat[20] = {};
+		snprintf(streamformat, 20, "%d:%d:%d", s->inputpipe.samples, s->inputpipe.samplesize * 8, s->inputpipe.channels);
+		json_object_object_add(query, "sampleformat", json_object_new_string(streamformat));
 		json_object_object_add(query, "timeout_ms", json_object_new_int(s->inputpipe.pipelength_ms));
 		json_object_object_add(uri, "query", query);
 
 		json_object_object_add(uri, "raw", json_object_new_string(s->raw));
-		json_object_object_add(uri, "scheme", json_object_new_string("pipe"));
+		json_object_object_add(uri, "scheme", json_object_new_string(print_stream_protocol(s->protocol)));
 
 		json_object_array_add(streams, stream);
 
@@ -198,7 +200,7 @@ void json_build_serverstatus_server(json_object *in) {
 	json_object_object_add(snapserver, "name", json_object_new_string("Snapserver"));
 	json_object_object_add(snapserver, "protocolVersion", json_object_new_int(PACKET_FORMAT_VERSION));
 	// json_object_object_add(snapserver, "version", json_object_new_string(SOURCE_VERSION));
-	json_object_object_add(snapserver, "version", json_object_new_string("0.15.0"));
+	json_object_object_add(snapserver, "version", json_object_new_string(SOURCE_VERSION));
 
 	json_object_object_add(server, "host", host);
 	json_object_object_add(server, "snapserver", snapserver);
@@ -341,16 +343,6 @@ int handle_request(jsonrpc_request *request, int fd) {
 		handle_server_getstatus(request, fd);
 	}
 	return 1;
-}
-
-void stringprocessor(jsonrpc_request *request) {
-	if (!strncmp(request->method, "Server.GetRPCVersion", 20)) {
-		log_error("calling getrpcversion\n");
-	} else if (!strncmp(request->method, "get_prefixes", 12)) {
-		log_error("belanglose Nachricht\n");
-	}
-
-	return;
 }
 
 void socket_client_remove(socket_ctx *ctx, socketclient *sc) {
