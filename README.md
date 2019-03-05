@@ -75,14 +75,13 @@ Allowed options:
   -s <file>                           filename of the PCM input stream.
   -c, --codec arg (=opus)             Default transport codec *
                                       (flac*|opus|pcm*)[:options]
-  -B <read_ms>                        Default stream read buffer [ms]
-  -b, --buffer arg (=1000)            Buffer [ms]
+  -b, --buffer arg (=1000)            Read ahead buffer before playing [ms]
 ```
 Options marked with (*) are not implemented yet.
 
 I am starting snapserver like this:
 ```
-snapcast-server -b 25000 -s /tmp/snapfifo -B 120 -p 1704
+snapcast-server -b 25000 -s "pipe:///tmp/snapfifo?buffer_ms=120&codec=opus&name=default&sampleformat=48000:16:2&timeout_ms=1000" -p 1704
 ```
 
 ### Client
@@ -93,17 +92,18 @@ Allowed options:
   -v                              verbose output
   -d                              debug output
   -l                              list pcm devices
-  -s,                             index or name of the soundcard
+  -m <control>                    name of the mixer device
+  -c <card>                       sound device on which the mixer lives eg "hw:1"
+  -s <playback_device>            index or name of the soundcard
   -H, --host arg                  server hostname or ip address
-  -p (=1704)                      local port
-  -P (=1704)                      server port
+  -p (=1704)                      server port
   -L arg (=0)                     latency of the client in ms
   -i, --instance arg (=1)         instance id
 ```
 
 I am starting the client like this:
 ```
-snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default
+snapcast-client -H <hostname-of-server> -p <port of server - 1704> -s default
 ```
 
 
@@ -123,11 +123,14 @@ snapcast-client -H <hostname-of-server> -p 1705 -P 1704 -s default
 
 ## Limitations
 
+* The Audio player will has to resample to a fixed sample rate.
 * exclusively Linux is supported (patches welcome)
-* No avahi support (patches welcome)
-* supports a single stream only (patches welcome)
 
 ## Building SnapCastC
+
+The included Dockerfile provides a build environment, that is used for the 
+travis-ci integration. See the script section of .travis.yml on how to run it.
+Of course, this can be used to build SnapCastC on your own infrastructure.
 
 ### Dependencies
 
