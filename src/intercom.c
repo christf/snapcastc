@@ -32,6 +32,8 @@ void schedule_hellos(struct intercom_task *data, int s_timeout, int ms_timeout, 
 
 uint32_t get_nonce() { return htonl((nonce++ % NONCE_MAX)); }
 
+int ringbuffer_getnextindex(intercom_ctx *ctx, int i) { return (i + 1) % ctx->buffer_elements; }
+
 void free_intercom_task(void *d) {
 	struct intercom_task *data = d;
 	free(data->packet);
@@ -198,6 +200,21 @@ int parse_request(uint8_t *packet, uint32_t *nonce) {
 	return packet[1];
 }
 
+int ringbuffer_fill(intercom_ctx *ctx) {
+	int fill = 0;
+	if (ctx->bufferrindex == ctx->bufferwindex)
+		return fill;
+
+	if (ctx->buffer_wraparound)
+		fill = ctx->buffer_elements - (ctx->bufferrindex - ctx->bufferwindex);
+	else
+		fill = ctx->bufferwindex - ctx->bufferrindex;
+
+	log_debug("buffer fill: %d wraparound %d elements: %d readindex: %d writeindex %d\n", fill, ctx->buffer_wraparound, ctx->buffer_elements,
+		  ctx->bufferrindex, ctx->bufferwindex);
+	return fill;
+}
+
 int parse_hello(uint8_t *packet, client_t *client) {
 	uint32_t tmp;
 	memcpy(&tmp, &packet[2], sizeof(uint32_t));
@@ -263,7 +280,7 @@ bool intercom_handle_server_operation(intercom_ctx *ctx, intercom_packet_sop *pa
 			case CLIENT_STOP:
 				currentoffset += tlv_get_length(packetpointer);
 				pcmChunk p;
-				while (ctx->bufferrindex < ctx->bufferwindex) {
+				while (ringbuffer_fill(ctx)) {
 					intercom_getnextaudiochunk(ctx, &p);
 				}
 
@@ -300,15 +317,13 @@ struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx) {
 }
 
 bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret) {
-	if (ctx->bufferrindex < ctx->bufferwindex + ctx->buffer_wraparound * ctx->buffer_elements) {
+	if (ringbuffer_fill(ctx)) {
 		*ret = &ctx->buffer[ctx->bufferrindex];
 		return true;
 	} else {
 		return false;
 	}
 }
-
-int ringbuffer_fill(intercom_ctx *ctx) { return ctx->bufferwindex - ctx->bufferrindex + ctx->buffer_wraparound * ctx->buffer_elements; }
 
 void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 	pcmChunk *c;
@@ -327,24 +342,24 @@ void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 	print_packet(ret->data, ret->size);
 
 	if (ret->play_at_tv_sec > 0) {
-		ctx->bufferrindex = (ctx->bufferrindex + 1) % ctx->buffer_elements;
+		ctx->bufferrindex = ringbuffer_getnextindex(ctx, ctx->bufferrindex);
 		if (ctx->bufferrindex == 0)
 			ctx->buffer_wraparound = 0;
 	}
 }
 
+/*
 int ringbuffer_getprevindex(intercom_ctx *ctx, int i) {
 	if (i == 0)
 		return ctx->buffer_elements;
 
 	return (i - 1);
 }
-
-int ringbuffer_getnextindex(intercom_ctx *ctx, int i) { return (i + 1) % ctx->buffer_elements; }
+*/
 
 void bufferwindex_increment(intercom_ctx *ctx) {
-	ctx->bufferwindex = (ctx->bufferwindex + 1) % ctx->buffer_elements;
-	if (ctx->bufferwindex == 0)
+	ctx->bufferwindex = ringbuffer_getnextindex(ctx, ctx->bufferwindex);
+	if (ctx->bufferwindex == 0 && ctx->bufferrindex != 0)
 		ctx->buffer_wraparound = 1;
 }
 
@@ -361,13 +376,13 @@ void intercom_put_chunk_locate(intercom_ctx *ctx, pcmChunk *chunk) {
 		if (timespec_cmp(elem_time, chunk_time) < 0) {
 			log_debug("placing late chunk in buffer at position %d: %s chunk to be sorted: %s\n", look_at,
 				  print_chunk(&ctx->buffer[look_at]), print_chunk(chunk));
-			memcpy(&ctx->buffer[(look_at + 1) % ctx->buffer_elements], chunk, sizeof(pcmChunk));
+			memcpy(&ctx->buffer[ringbuffer_getnextindex(ctx, look_at)], chunk, sizeof(pcmChunk));
 			bufferwindex_increment(ctx);
 			break;
 		} else {  // copy one element up
 			log_debug("copying up - chunk from buffer: %s chunk to be sorted: %s\n", print_chunk(&ctx->buffer[look_at]),
 				  print_chunk(chunk));
-			memcpy(&ctx->buffer[(look_at + 1) % ctx->buffer_elements], &ctx->buffer[look_at], sizeof(pcmChunk));
+			memcpy(&ctx->buffer[ringbuffer_getnextindex(ctx, look_at)], &ctx->buffer[look_at], sizeof(pcmChunk));
 		}
 
 		--fill;
@@ -483,15 +498,14 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 	size_t this_seqno = ntohl(packet->hdr.nonce);
 
 	// when buffer is empty, it may not have been initialized and thus the server may have adjusted its chunk size.
-	if (ctx->bufferwindex == ctx->bufferrindex) {
+	if (!ringbuffer_fill(ctx)) {
 		chunk_decode(&chunk);
 		realloc_intercom_buffer_when_required(ctx, ntohs(packet->bufferms), chunk_getduration_ms(&chunk));
 	}
 
 	log_debug("read chunk from packet: %d samples: %d frame size:%d  channels: %d packet_len: %d, hdrsize: %d\n\n", chunk.size, chunk.samples,
 		  chunk.frame_size, chunk.channels, packet_len, sizeof(intercom_packet_audio));
-
-	//	print_packet((void*)pchunk, 17);
+	// print_packet((void*)pchunk, 17);
 
 	if (!is_next_chunk(this_seqno) && this_seqno - ctx->lastreceviedseqno < 1000) {
 		struct timespec ctime;
