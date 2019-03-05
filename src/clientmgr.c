@@ -26,7 +26,7 @@ struct client *findinvector(void *_vector, const uint32_t id) {
 
 void clientmgr_send_audio_buffer_to_client(client_t *client) {
 	for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
-		log_error("sending packet %d to %s\n", i, print_ip(&client->ip));
+		log_verbose("sending packet %d to %s\n", i, print_ip(&client->ip));
 		audio_packet *ap = &VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, i);
 		intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, ap->data, ap->len, client->port);
 	}
@@ -157,6 +157,9 @@ bool is_roughly(uint8_t a, uint8_t b) {
 }
 
 bool clientmgr_refresh_client(struct client *client) {
+	if (!client)
+		return false;
+
 	client_t *existingclient = get_client(client->id);
 	struct timespec ctime;
 	obtainsystime(&ctime);
@@ -167,7 +170,6 @@ bool clientmgr_refresh_client(struct client *client) {
 		client_t n_client = {};
 		new_client(&n_client, client->id, &client->ip, client->port);
 		existingclient = get_client(client->id);
-		client->connected = true;
 
 		existingclient->stream = &VECTOR_INDEX(snapctx.streams, 0);
 
@@ -185,20 +187,19 @@ bool clientmgr_refresh_client(struct client *client) {
 
 	existingclient->connected = true;
 	existingclient->lastseen = ctime;
+	existingclient->latency = client->latency;
 
-	if (client) {
-		existingclient->latency = client->latency;
-
-		if (!is_roughly(client->volume_percent, existingclient->volume_percent)) {
-			log_verbose("volume of client %d is not volume of existingclient %d\n", client->volume_percent,
-				    existingclient->volume_percent);
-			clientmgr_client_refreshvolume(existingclient, existingclient->volume_percent);
-		}
+	if (!is_roughly(client->volume_percent, existingclient->volume_percent)) {
+		log_verbose("volume of client %d is not volume of existingclient %d\n", client->volume_percent, existingclient->volume_percent);
+		clientmgr_client_refreshvolume(existingclient, existingclient->volume_percent);
 	}
 
-	log_verbose("clientmgr: refreshing client: %lu\n", client->id);
-	print_client(existingclient);
-	reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);
+	// It might be a different client instance, if the port changed. Let's let the old instance time out
+	if (client->port == existingclient->port) {
+		log_verbose("clientmgr: refreshing client: %lu\n", client->id);
+		print_client(existingclient);
+		reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);
+	}
 
 	return true;
 }
