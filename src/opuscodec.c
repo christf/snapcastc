@@ -1,4 +1,4 @@
-
+#include "opuscodec.h"
 #include "alloc.h"
 #include "error.h"
 #include "pcmchunk.h"
@@ -7,17 +7,15 @@
 
 #include "syscallwrappers.h"
 
-// opus will encode / decode max 120ms
-#define MAX_FRAMES (snapctx.samples * 12 / 100)
+// opus knows of audio chunks of up to 120 milliseconds.
+#define OPUS_MAX_CHUNK_LENGTH_MS 120
 
-void decode_opus_handle(pcmChunk *chunk) {
+
+void decode_opus_handle(opuscodec_ctx *ctx, pcmChunk *chunk) {
 	// The initialization really should happen somewhere else...
-	if (!snapctx.opuscodec_ctx.decoder) {
+	if (!ctx->decoder) {
 		log_error("initializing opus codec\n");
-		snapctx.samples = chunk->samples;
-		snapctx.channels = chunk->channels;
-		snapctx.frame_size = chunk->frame_size;
-		opus_init_decoder();
+		opus_init_decoder(ctx, chunk->samples, chunk->channels);
 	}
 
 	struct timespec ctime;
@@ -26,8 +24,9 @@ void decode_opus_handle(pcmChunk *chunk) {
 		log_debug("starting decoder at %s\n", print_timespec(&ctime));
 	}
 
-	uint8_t *out[MAX_FRAMES * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size];
-	int frames = opus_decode(snapctx.opuscodec_ctx.decoder, chunk->data, chunk->size, (opus_int16 *)out, MAX_FRAMES, 0);
+	int MAX_FRAMES = chunk->samples * OPUS_MAX_CHUNK_LENGTH_MS / 1000;
+	uint8_t *out[MAX_FRAMES * chunk->channels * chunk->frame_size];
+	int frames = opus_decode(ctx->decoder, chunk->data, chunk->size, (opus_int16 *)out, MAX_FRAMES, 0);
 	if (frames <= 0) {
 		pcmChunk empty;
 		get_emptychunk(&empty);
@@ -51,13 +50,13 @@ void decode_opus_handle(pcmChunk *chunk) {
 	}
 }
 
-void encode_opus_handle(pcmChunk *chunk) {
+void encode_opus_handle(opuscodec_ctx *ctx, pcmChunk *chunk) {
 	unsigned char out[snapctx.intercom_ctx.mtu - sizeof(intercom_packet_audio)];
 
 	int frames = chunk->size / chunk->frame_size / chunk->channels;
 	log_debug("encode opus: chunk: chunksize: %d %d %d %d\n", chunk->size, chunk->samples, chunk->frame_size, frames);
 
-	int nbBytes = opus_encode(snapctx.opuscodec_ctx.encoder, (opus_int16 *)chunk->data, frames, out, snapctx.opuscodec_ctx.mss);
+	int nbBytes = opus_encode(ctx->encoder, (opus_int16 *)chunk->data, frames, out, ctx->mss);
 	if (nbBytes < 0) {
 		log_error("encode failed: %s\n", opus_strerror(nbBytes));
 	}
@@ -69,27 +68,29 @@ void encode_opus_handle(pcmChunk *chunk) {
 	log_debug("encode happened, adjusting chunk size: %d\n", chunk->size);
 }
 
-void opus_init_decoder() {
+void opus_init_decoder(opuscodec_ctx *ctx, size_t samples, size_t channels) {
 	int err = 0;
-	snapctx.opuscodec_ctx.decoder = opus_decoder_create(snapctx.samples, snapctx.channels, &err);
+	ctx->decoder = opus_decoder_create(samples, channels, &err);
 	if (err < 0) {
 		exit_error("failed to create decoder: %s\n", opus_strerror(err));
 	}
 }
 
-void opus_init_encoder(int mss) {
+void opus_init_encoder(opuscodec_ctx *ctx,int mss, size_t samples, size_t channels) {
 	int err = 0;
-	snapctx.opuscodec_ctx.mss = mss;
-	snapctx.opuscodec_ctx.encoder = opus_encoder_create(snapctx.samples, snapctx.channels, OPUS_APPLICATION_AUDIO, &err);
+	ctx->mss = mss;
+	ctx->encoder = opus_encoder_create(samples, channels, OPUS_APPLICATION_AUDIO, &err);
 
 	if (err < 0)
-		exit_error("failed to create an encoder: %s\n", opus_strerror(err));
+		exit_error("failed to create an encoder: %s\nfor parameters: mss %lu samples %lu channels %lu\n", opus_strerror(err), mss, samples, channels);
 
-	if (opus_encoder_ctl(snapctx.opuscodec_ctx.encoder, OPUS_SET_BITRATE(snapctx.opuscodec_ctx.bitrate)) < 0)
+	if (opus_encoder_ctl(ctx->encoder, OPUS_SET_BITRATE(ctx->bitrate)) < 0)
 		exit_error("failed to set bitrate: %s\n", opus_strerror(err));
 }
 
-void uninit() {
-	opus_encoder_destroy(snapctx.opuscodec_ctx.encoder);
-	opus_decoder_destroy(snapctx.opuscodec_ctx.decoder);
+void uninit(opuscodec_ctx *ctx) {
+	opus_encoder_destroy(ctx->encoder);
+	opus_decoder_destroy(ctx->decoder);
+	ctx->decoder = NULL;
+	ctx->encoder = NULL;
 }

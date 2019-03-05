@@ -11,7 +11,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SNAPCAST_BINARY_DIR} ${CMAKE_C
 
 list(APPEND COMMON_DEPS util.c taskqueue.c timespec.c vector.c syscallwrappers.c intercom.c clientmgr.c pcmchunk.c opuscodec.c alsaplayer.c)
 list(APPEND CLIENT_DEPS)
-list(APPEND SERVER_DEPS inputpipe.c socket.c jsonrpc.c)
+list(APPEND SERVER_DEPS inputpipe.c socket.c jsonrpc.c stream.c)
 
 add_library(common_libs OBJECT ${COMMON_DEPS})
 add_library(client_deps OBJECT ${CLIENT_DEPS})

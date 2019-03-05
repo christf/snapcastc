@@ -91,21 +91,19 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		play_at.tv_sec = ctx->chunk.play_at_tv_sec;
 		play_at.tv_nsec = ctx->chunk.play_at_tv_nsec;
 
-		play_at = timeAddMs(&play_at, snapctx.readms);
+		play_at = timeAddMs(&play_at, ctx->read_ms);
 		timediff t = timeSub(&ctime, &play_at);
 		ctx->chunk.play_at_tv_sec = play_at.tv_sec;
 		ctx->chunk.play_at_tv_nsec = play_at.tv_nsec;
 		ctx->lastchunk = play_at;
 
-		log_verbose(
-		    "read %lu Bytes of data from %s, last read was %lu, reader state: %i, PLAYING: %i, IDLE: %i, to be played at %s, current time "
-		    "%s, diff: %s\n",
-		    ctx->data_read, ctx->fname, count, ctx->state, PLAYING, IDLE, print_timespec(&play_at), print_timespec(&ctime),
-		    print_timespec(&t.time));
+		log_verbose("read %lu Bytes of data from %s, last read was %lu, reader state: %s, to be played at %s, current time %s, diff: %s\n",
+			    ctx->data_read, ctx->fname, count, print_inputpipe_status(ctx->state), print_timespec(&play_at), print_timespec(&ctime),
+			    print_timespec(&t.time));
 		ctx->chunk.size = ctx->data_read;
-		ctx->chunk.frame_size = snapctx.frame_size;
-		ctx->chunk.samples = snapctx.samples;
-		ctx->chunk.channels = snapctx.channels;
+		ctx->chunk.frame_size = ctx->samplesize;
+		ctx->chunk.samples = ctx->samples;
+		ctx->chunk.channels = ctx->channels;
 		ctx->lastchunk.tv_sec = ctx->chunk.play_at_tv_sec;
 		ctx->lastchunk.tv_nsec = ctx->chunk.play_at_tv_nsec;
 		ctx->chunk.codec = CODEC_PCM;
@@ -125,13 +123,13 @@ void inputpipe_uninit(inputpipe_ctx *ctx) {
 }
 
 void inputpipe_init(inputpipe_ctx *ctx) {
-	uint32_t c = snapctx.samples * snapctx.channels * snapctx.frame_size * snapctx.readms / 1000;
+	uint32_t c = ctx->samples * ctx->channels * ctx->samplesize * ctx->read_ms / 1000;
 	ctx->chunksize = c;
 	ctx->chunk.data = snap_alloc(ctx->chunksize);
 	ctx->chunk.size = ctx->chunksize;
-	ctx->chunk.samples = snapctx.samples;
-	ctx->chunk.frame_size = snapctx.frame_size;
-	ctx->chunk.channels = snapctx.channels;
+	ctx->chunk.samples = ctx->samples;
+	ctx->chunk.frame_size = ctx->samplesize;
+	ctx->chunk.channels = ctx->channels;
 	ctx->data_read = 0;
 	ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
 }

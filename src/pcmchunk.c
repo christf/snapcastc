@@ -8,12 +8,15 @@
 #include <time.h>
 #include "timespec.h"
 
+
+#define EMPTY_CHUNK_SIZE_MS 5
+
 void get_emptychunk(pcmChunk *ret) {
 	struct timespec t = {};
 	ret->samples = snapctx.alsaplayer_ctx.rate;
 	ret->channels = snapctx.alsaplayer_ctx.channels;
 	ret->frame_size = snapctx.alsaplayer_ctx.frame_size;
-	ret->size = snapctx.alsaplayer_ctx.rate * snapctx.readms * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size / 1000;
+	ret->size = snapctx.alsaplayer_ctx.rate * EMPTY_CHUNK_SIZE_MS * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size / 1000;
 	ret->play_at_tv_sec = t.tv_sec;
 	ret->play_at_tv_nsec = t.tv_nsec;
 	ret->data = snap_alloc(ret->size);
@@ -29,10 +32,13 @@ int chunk_getduration_ms(pcmChunk *chunk) {
 
 bool chunk_is_empty(pcmChunk *c) { return !(c->play_at_tv_sec > 0); }
 
+
+// this should only be available in client
 bool chunk_decode(pcmChunk *c) {
+	extern opuscodec_ctx opuscodec;
 	if (c->codec == CODEC_OPUS) {
 		log_verbose("Decoding opus data for chunk\n");
-		decode_opus_handle(c);
+		decode_opus_handle(&opuscodec, c);
 	}
 }
 
@@ -46,6 +52,7 @@ void chunk_ntoh(pcmChunk *chunk) {
 void chunk_free_members(pcmChunk *chunk) {
 	free(chunk->data);
 	chunk->data = NULL;
+	chunk->size = 0;
 }
 
 void pcmchunk_shaveoff(pcmChunk *chunk, int frames) {

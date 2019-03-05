@@ -33,13 +33,16 @@
 enum inputpipe_state { IDLE = 0, PLAYING };
 
 typedef struct {
-	struct snapctx *snapctx;
 	char *fname;
 	pcmChunk chunk;
 
 	enum inputpipe_state state;
 
 	ssize_t data_read;
+	ssize_t read_ms;
+	ssize_t samples;
+	int samplesize;
+	int channels;
 	int fd;
 
 	uint16_t chunksize;

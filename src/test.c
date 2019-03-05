@@ -27,11 +27,12 @@
 #include "alloc.h"
 #include "error.h"
 #include "intercom.h"
+#include "snapcast.h"
 #include "socket.h"
+#include "stream.h"
 #include "types.h"
 #include "util.h"
 #include "vector.h"
-#include "snapcast.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -50,20 +51,27 @@
 snapctx_t snapctx = {};
 
 int tests_run = 0;
-#define FAIL() printf("\nfailure in %s() line %d\n", __func__, __LINE__)
-#define _assert(test)             \
-	do {                      \
-		if (!(test)) {    \
-			FAIL();   \
-			return 1; \
-		}                 \
+
+#define FAIL()                                                                      \
+	{                                                                           \
+		fprintf(stderr, "\nfailure in %s() line %d\n", __func__, __LINE__); \
+		return 1;                                                           \
+	}
+
+#define _assert(test)           \
+	do {                    \
+		if (!(test))    \
+			FAIL(); \
 	} while (0)
-#define _verify(test)             \
-	do {                      \
-		int r = test();   \
-		tests_run++;      \
-		if (r)            \
-			return r; \
+
+#define _verify(test)                                                        \
+	do {                                                                 \
+		int r = test();                                              \
+		tests_run++;                                                 \
+		if (r) {                                                     \
+			fprintf(stderr, "Test case %d failed\n", tests_run); \
+			return r;                                            \
+		}                                                            \
 	} while (0)
 
 int test_vector_init() {
@@ -82,12 +90,45 @@ int test_vector_init() {
 	return 0;
 }
 
+int parse_streaminfo() {
+	char optarg[1024];
+	stream s = {};
+	snprintf(optarg, 1024, "pipe:///tmp/snapfifo?buffer_ms=20&codec=opus&name=default&sampleformat=48000:16:2&timeout_ms=1000");
+
+	if (!stream_parse(&s, optarg))
+		FAIL();
+
+	if (s.protocol != PIPE)
+		FAIL();
+	if (strcmp(s.inputpipe.fname, "/tmp/snapfifo"))
+		FAIL();
+	if (s.inputpipe.pipelength_ms != 1000)
+		FAIL();
+	if (strcmp(s.name, "default"))
+		FAIL();
+	if (s.inputpipe.read_ms != 20)
+		FAIL();
+	if (s.codec != OPUS)
+		FAIL();
+	if (s.inputpipe.samples != 48000)
+		FAIL();
+	if (s.inputpipe.samplesize != 2)
+		FAIL();
+	if (s.inputpipe.channels != 2)
+		FAIL();
+
+	return 0;
+}
+
 int all_tests() {
 	_verify(test_vector_init);
+	_verify(parse_streaminfo);
 	return 0;
 }
 
 int main(int argc, char **argv) {
+	snapctx.verbose = true;
+	snapctx.debug = true;
 	int result = all_tests();
 	if (result == 0)
 		printf("PASSED\n");

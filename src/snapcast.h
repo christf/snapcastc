@@ -42,19 +42,12 @@ struct snapctx {
 	alsaplayer_ctx alsaplayer_ctx;
 	clientmgr_ctx clientmgr_ctx;
 	intercom_ctx intercom_ctx;
-	opuscodec_ctx opuscodec_ctx;
 	socket_ctx socket_ctx;
 
 	VECTOR(stream) streams;
 
 	int efd;
 	uint16_t bufferms;
-
-	int samples;
-	int frame_size;
-	int channels;
-
-	size_t readms;
 
 	uint16_t socketport;
 
