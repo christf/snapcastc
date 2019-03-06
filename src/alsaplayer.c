@@ -205,7 +205,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		return;
 	}
 
-	if (! ( chunk.channels && chunk.frame_size && chunk.size) ) {
+	if (!(chunk.channels && chunk.frame_size && chunk.size)) {
 		log_error("retrieved zero chunk, not writing to alsa device\n");
 		return;
 	}
@@ -216,7 +216,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	} else if (pcm < 0) {
 		log_error("ERROR. Can't write to PCM device. %s, snd_pcm_recover(%d)\n", snd_strerror(pcm),
 			  (int)snd_pcm_recover(ctx->pcm_handle, pcm, 0));
-	} else if (pcm < chunk.size / ctx->channels / ctx->frame_size) {
+	} else if (pcm < chunk.size / chunk.channels / chunk.frame_size) {
 		log_debug("delay frames (split): %d\n", delayp);
 		if (!ctx->overflow) {
 			ctx->overflow = snap_alloc(sizeof(pcmChunk));
@@ -225,8 +225,9 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 		}
 		pcmchunk_shaveoff(ctx->overflow, pcm);
 
-		log_debug("Wrote %d/%d bytes to pcm - splitting chunk to write the rest later\n", pcm, chunk.size / ctx->channels / ctx->frame_size);
-	} else if (pcm == chunk.size / ctx->channels / ctx->frame_size) {
+		log_debug("Wrote %d/%d frames to pcm - splitting chunk to write the rest later\n", pcm,
+			  chunk.size / chunk.channels / chunk.frame_size);
+	} else if (pcm == chunk.size / chunk.channels / chunk.frame_size) {
 		log_debug("delay frames: %d\n", delayp);
 		if (chunk.size) {
 			chunk_free_members(&chunk);
@@ -368,7 +369,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	else if (ctx->frame_size == 4)
 		snd_pcm_format = SND_PCM_FORMAT_S32_LE;
 	else
-		exit_error("unsupported format\n");
+		exit_error("unsupported format: frame_size %lu\n", ctx->frame_size);
 
 	if ((pcm = snd_pcm_hw_params_set_format(ctx->pcm_handle, ctx->params, snd_pcm_format)) < 0)
 		log_error("ERROR: Can't set format. %s\n", snd_strerror(pcm));
