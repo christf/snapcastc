@@ -60,14 +60,33 @@ void sig_term_handler(int signum, siginfo_t *info, void *ptr) {
 	_exit(EXIT_SUCCESS);
 }
 
+int alsa_get_fd_amount() {
+	int fd_amount;
+
+	alsaplayer_ctx aplay_tmp_ctx = {
+	    // just set some sane defaults such that we can determine how many FD alsa will need.
+	    .frame_size = 2,
+	    .channels = 2,
+	    .rate = 48000,
+	    .pcm.name = strdupa(snapctx.alsaplayer_ctx.pcm.name),
+	    .card = strdupa(snapctx.alsaplayer_ctx.card),
+	};
+	alsaplayer_init(&aplay_tmp_ctx);
+
+	fd_amount = aplay_tmp_ctx.pollfd_count;
+
+	alsaplayer_uninit(&aplay_tmp_ctx);
+
+	return fd_amount;
+}
+
 void loop() {
 	struct pollfd fds[snapctx.alsaplayer_ctx.pollfd_count + 2];  // allocate fds for alsa events
 
 	int fd_index = 0;
 	snapctx.alsaplayer_ctx.main_poll_fd = fds;  // alsa fds must be the first
 
-	init_alsafd(&snapctx.alsaplayer_ctx);
-	fd_index += snapctx.alsaplayer_ctx.pollfd_count;
+	fd_index += alsa_get_fd_amount();
 
 	fds[fd_index].fd = snapctx.taskqueue_ctx.fd;
 	fds[fd_index].events = POLLIN;
@@ -79,6 +98,7 @@ void loop() {
 	log_verbose("starting loop\n");
 
 	while (1) {
+		log_debug("polling\n");
 		int n = poll(fds, fd_index, -1);
 
 		if (n == -1) {
@@ -104,12 +124,6 @@ void loop() {
 				} else if ((fds[i].revents & POLLIN) && (fds[i].fd == snapctx.intercom_ctx.fd)) {
 					log_debug("intercom ready for IO\n");
 					intercom_handle_in(&snapctx.intercom_ctx, fds[i].fd);
-
-					if (!snapctx.alsaplayer_ctx.initialized) {
-						log_verbose("initializing alsa\n");
-						alsaplayer_init(&snapctx.alsaplayer_ctx);
-						init_alsafd(&snapctx.alsaplayer_ctx);
-					}
 				} else if ((fds[i].revents & POLLOUT) && (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx))) {
 					log_debug("alsa device ready for IO\n");
 					alsaplayer_handle(&snapctx.alsaplayer_ctx);
@@ -141,17 +155,11 @@ int main(int argc, char *argv[]) {
 
 	snapctx.alsaplayer_ctx.initialized = false;
 
-	// TODO: set value from stream info
 	snapctx.bufferms = 1000;
-	snapctx.alsaplayer_ctx.rate = 48000;
-	snapctx.alsaplayer_ctx.channels = 2;
-	snapctx.alsaplayer_ctx.frame_size = 2;
-	snapctx.readms = 5;
 	snapctx.alsaplayer_ctx.card = strdup("default");
 	snapctx.alsaplayer_ctx.mixer = strdup("Master");
 	snapctx.alsaplayer_ctx.pcm.name = strdup("default");
 
-	// set some defaults
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
 	snapctx.intercom_ctx.mtu = 1500;  // Do we need to expose this to the user via cli?
 	obtainrandom(&snapctx.intercom_ctx.nodeid, sizeof(uint32_t), 0);
@@ -169,15 +177,15 @@ int main(int argc, char *argv[]) {
 				exit(EXIT_SUCCESS);
 			case 'c':
 				free(snapctx.alsaplayer_ctx.card);
-				snapctx.alsaplayer_ctx.card = strdupa(optarg);
+				snapctx.alsaplayer_ctx.card = strdup(optarg);
 				break;
 			case 'm':
 				free(snapctx.alsaplayer_ctx.mixer);
-				snapctx.alsaplayer_ctx.mixer = strdupa(optarg);
+				snapctx.alsaplayer_ctx.mixer = strdup(optarg);
 				break;
 			case 's':
 				free(snapctx.alsaplayer_ctx.pcm.name);
-				snapctx.alsaplayer_ctx.pcm.name = strdupa(optarg);
+				snapctx.alsaplayer_ctx.pcm.name = strdup(optarg);
 				break;
 			case 'l':
 				alsaplayer_pcm_list();
@@ -245,8 +253,6 @@ int main(int argc, char *argv[]) {
 
 	catch_sigterm();
 	taskqueue_init(&snapctx.taskqueue_ctx);
-
-	alsaplayer_init(&snapctx.alsaplayer_ctx);
 
 	intercom_init(&snapctx.intercom_ctx);
 	intercom_hello(&snapctx.intercom_ctx, &snapctx.intercom_ctx.serverip, snapctx.intercom_ctx.port);

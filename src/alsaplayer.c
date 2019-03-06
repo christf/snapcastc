@@ -238,8 +238,9 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 }
 
 void alsaplayer_uninit_task(void *d) {
+	alsaplayer_ctx *ctx = (alsaplayer_ctx*)d;
 	log_verbose("unititializing alsa after timeout\n");
-	alsaplayer_uninit(&snapctx.alsaplayer_ctx);
+	alsaplayer_uninit(ctx);
 }
 
 void alsaplayer_pcm_list() {
@@ -286,6 +287,10 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	snd_pcm_close(ctx->pcm_handle);
 	ctx->initialized = ctx->playing = false;
 	free(ctx->ufds);
+
+	if (ctx->close_task)
+		taskqueue_remove(ctx->close_task);
+	ctx->close_task = NULL;
 
 	if (ctx->main_poll_fd)
 		for (int i = 0; i < ctx->pollfd_count; ++i) {
@@ -352,7 +357,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 
 	log_verbose("initializing alsa\n");
 	ctx->close_task = post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms * 1.2) / 1000, (int)(snapctx.bufferms * 1.2) % 1000,
-				    alsaplayer_uninit_task, NULL, NULL);
+				    alsaplayer_uninit_task, NULL, ctx);
 
 	int buff_size;
 
