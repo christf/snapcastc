@@ -302,8 +302,8 @@ void init_alsafd(alsaplayer_ctx *ctx) {
 }
 
 void mixer_init(alsaplayer_ctx *ctx) {
-	snd_mixer_selem_id_t *sid;
-	snd_mixer_open(&ctx->mixer_handle, 0);
+	snd_mixer_selem_id_t *sid = NULL;
+	snd_mixer_open(&ctx->mixer_handle, 0);  // mode is unused => setting 0
 	snd_mixer_attach(ctx->mixer_handle, ctx->card);
 	snd_mixer_selem_register(ctx->mixer_handle, NULL, NULL);
 	snd_mixer_load(ctx->mixer_handle);
@@ -316,7 +316,10 @@ void mixer_init(alsaplayer_ctx *ctx) {
 	snd_mixer_selem_get_playback_volume_range(ctx->mixer_elem, &ctx->mixer_min, &ctx->mixer_max);
 }
 
-void mixer_uninit(alsaplayer_ctx *ctx) { snd_mixer_close(ctx->mixer_handle); }
+void mixer_uninit(alsaplayer_ctx *ctx) {
+	snd_mixer_close(ctx->mixer_handle);
+	ctx->mixer_handle = NULL;
+}
 
 uint8_t obtain_volume(alsaplayer_ctx *ctx) {
 	long volume = 0;
@@ -340,6 +343,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	ctx->empty_chunks_in_row = 0;
 	ctx->playing = false;
 	ctx->overflow = NULL;
+	ctx->mixer_handle = NULL;
 
 	if (ctx->initialized)
 		return;
