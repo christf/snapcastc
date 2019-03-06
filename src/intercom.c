@@ -329,7 +329,7 @@ void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 	pcmChunk *c;
 	if (!intercom_peeknextaudiochunk(ctx, &c)) {
 		log_error("BUFFER UNDERRUN\n");
-		get_emptychunk(ret);
+		get_emptychunk(ret, 5);
 	} else {
 		memcpy(ret, c, sizeof(pcmChunk));
 	}

@@ -28,8 +28,10 @@ void decode_opus_handle(opuscodec_ctx *ctx, pcmChunk *chunk) {
 	if (frames <= 0) {
 		free(out);
 		free(chunk->data);
-		pcmChunk empty;
-		get_emptychunk(&empty);
+		pcmChunk empty = {
+		    .samples = chunk->samples, .channels = chunk->channels, .frame_size = chunk->frame_size,
+		};
+		get_emptychunk(&empty, 5);
 
 		log_error("decoder failed: %s\n", opus_strerror(frames));
 		chunk->data = empty.data;

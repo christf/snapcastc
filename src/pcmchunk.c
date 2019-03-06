@@ -11,18 +11,13 @@
 
 #define EMPTY_CHUNK_SIZE_MS 5
 
-void get_emptychunk(pcmChunk *ret) {
-	struct timespec t = {};
-	ret->samples = snapctx.alsaplayer_ctx.rate;
-	ret->channels = snapctx.alsaplayer_ctx.channels;
-	ret->frame_size = snapctx.alsaplayer_ctx.frame_size;
-	ret->size = snapctx.alsaplayer_ctx.rate * EMPTY_CHUNK_SIZE_MS * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size / 1000;
-	ret->play_at_tv_sec = t.tv_sec;
-	ret->play_at_tv_nsec = t.tv_nsec;
-	ret->data = snap_alloc(ret->size);
+void get_emptychunk(pcmChunk *ret, unsigned int length_ms) {
+	ret->size = ret->samples * length_ms * ret->channels * ret->frame_size / 1000;
+	ret->play_at_tv_sec = 0L;
+	ret->play_at_tv_nsec = 0L;
+	ret->data = snap_alloc0(ret->size);
 	ret->codec = CODEC_PCM;
-	memset(ret->data, 0, ret->size);
-	log_debug("created empty chunk with size %d\n", ret->size);
+	log_debug("created empty chunk with size %d and length %lu\n", ret->size, length_ms);
 }
 
 int chunk_getduration_ms(pcmChunk *chunk) {

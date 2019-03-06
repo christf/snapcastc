@@ -94,7 +94,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 	double factor = 1;
 	struct timespec ctime;
 	obtainsystime(&ctime);
-	struct timespec ts = ctime;
+	struct timespec ts_alsa_ready = ctime;
 
 	int near_ms = 1;
 	int not_even_close_ms;
@@ -103,14 +103,14 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 
 	size_t delay_ms_alsa = delay_frames * 1000 / snapctx.alsaplayer_ctx.rate;
 
-	ts = timeAddMs(&ts, delay_ms_alsa + snapctx.alsaplayer_ctx.latency_ms);
+	ts_alsa_ready = timeAddMs(&ts_alsa_ready, delay_ms_alsa + snapctx.alsaplayer_ctx.latency_ms);
 
-	timediff tdiff = timeSub(&ts, &nextchunk_playat);
-	// log_debug("ctime: %s nextchunk playat: %s, difference: %s\n", print_timespec(&ctime), print_timespec(&nextchunk_playat),
-	// print_timespec(&tdiff.time));
+	timediff tdiff = timeSub(&ts_alsa_ready, &nextchunk_playat);
 
-	bool is_near = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < near_ms * 1000000L);
-	if (snapctx.alsaplayer_ctx.playing || ((!snapctx.alsaplayer_ctx.playing) && tdiff.sign > 0) || is_near) {
+	bool is_near = timespec_isnear(&ts_alsa_ready, &nextchunk_playat, near_ms);
+	bool attempting_start_and_overshot = ((!snapctx.alsaplayer_ctx.playing) && (timespec_cmp(ts_alsa_ready, nextchunk_playat) >= 0));
+
+	if (snapctx.alsaplayer_ctx.playing || (attempting_start_and_overshot) || is_near) {
 		intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
 		if (chunk_is_empty(p)) {
 			snapctx.alsaplayer_ctx.empty_chunks_in_row++;
@@ -125,12 +125,8 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			chunk_decode(p);
 			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
 		}
-	} else
-		get_emptychunk(p);
-
-	if (ts.tv_sec) {
-		log_verbose("ctime: %s is_near: %d delay_alsa: %d ts: %s, tdiff: %s, tdiff sign: %d\n", print_timespec(&ctime), is_near,
-			    delay_ms_alsa, print_timespec(&ts), print_timespec(&tdiff.time), tdiff.sign);
+	} else {
+		get_emptychunk(p, timespec_isnear(&ts_alsa_ready, &nextchunk_playat, 120) ? tdiff.time.tv_nsec / 1000000L : 120);
 	}
 
 	if (!is_near) {
@@ -142,18 +138,18 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		if (factor < 0.5)
 			factor = 0.5;
 
-		// TODO: this factor already works pretty well, however we may end up in a local optimum while just playing one frame less or one
-		// frame more might be optimal.
-
 		not_even_close_ms = max(NOT_EVEN_CLOSE_MS, chunk_getduration_ms(p) / 2);
 
 		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
 		if (!not_even_close) {
 			log_error("Timing is not even close, ");
 			if (tdiff.sign < 0) {
-				log_error("we are ahead by %s seconds: replacing data with silence\n", print_timespec(&tdiff.time));
-				memset(p->data, 0, p->size);
-				p->play_at_tv_sec = 0;
+				log_error("we are ahead by %s seconds\n", print_timespec(&tdiff.time));
+				if (!chunk_is_empty(p)) {
+					memset(p->data, 0, p->size);
+					p->play_at_tv_sec = 0;
+					log_error("replacing data with silence\n");
+				}
 
 				snapctx.alsaplayer_ctx.playing = false;
 				snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
@@ -171,12 +167,12 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		}
 	}
 
-	if (!chunk_is_empty(p))  // Do not resample, when chunk contains only silence, save some CPU
+	if (!chunk_is_empty(p))  // Do not stretch, when chunk contains only silence, save some CPU
 		adjust_speed(p, factor);
 
-	log_verbose("status: %d factor: %f chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d\n",
-		    snapctx.alsaplayer_ctx.playing, factor, p->size, print_timespec(&ctime), print_timespec(&ts), print_timespec(&tdiff.time),
-		    tdiff.sign);
+	log_verbose("status: %d factor: %f chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d empty %d\n",
+		    snapctx.alsaplayer_ctx.playing, factor, p->size, print_timespec(&ctime), print_timespec(&ts_alsa_ready),
+		    print_timespec(&tdiff.time), tdiff.sign, chunk_is_empty(p));
 
 	return p->size;
 }
@@ -185,6 +181,10 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	unsigned int pcm;
 	snd_pcm_sframes_t delayp = 0;
 	pcmChunk chunk;
+	// initialize chunk. This will only be used if empty chunks are generated because of timing issues
+	chunk.samples = ctx->rate;
+	chunk.channels = ctx->channels;
+	chunk.frame_size = ctx->frame_size;
 
 	if (snd_pcm_delay(ctx->pcm_handle, &delayp) < 0)
 		log_verbose("could not obtain pcm delay\n");
@@ -238,7 +238,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 }
 
 void alsaplayer_uninit_task(void *d) {
-	alsaplayer_ctx *ctx = (alsaplayer_ctx*)d;
+	alsaplayer_ctx *ctx = (alsaplayer_ctx *)d;
 	log_verbose("unititializing alsa after timeout\n");
 	alsaplayer_uninit(ctx);
 }

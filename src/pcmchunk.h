@@ -21,7 +21,7 @@ typedef struct {
 } pcmChunk;
 
 void chunk_copy_meta(pcmChunk *dest, pcmChunk *src);
-void get_emptychunk(pcmChunk *ret);
+void get_emptychunk(pcmChunk *ret, unsigned int length_ms);
 bool chunk_is_empty(pcmChunk *c);
 void chunk_hton(pcmChunk *chunk);
 void chunk_ntoh(pcmChunk *chunk);
