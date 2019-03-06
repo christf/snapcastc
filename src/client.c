@@ -154,7 +154,6 @@ int main(int argc, char *argv[]) {
 	// set some defaults
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
 	snapctx.intercom_ctx.mtu = 1500;  // Do we need to expose this to the user via cli?
-	snapctx.intercom_ctx.serverport = INTERCOM_PORT;
 	obtainrandom(&snapctx.intercom_ctx.nodeid, sizeof(uint32_t), 0);
 
 	int option_index = 0;
@@ -183,9 +182,6 @@ int main(int argc, char *argv[]) {
 			case 'l':
 				alsaplayer_pcm_list();
 				exit(EXIT_SUCCESS);
-			case 'P':
-				snapctx.intercom_ctx.serverport = atoi(optarg);
-				break;
 			case 'p':
 				snapctx.intercom_ctx.port = atoi(optarg);
 				break;
@@ -224,7 +220,6 @@ int main(int argc, char *argv[]) {
 					close(sfd);
 				}
 				if (rp == NULL) {
-					fprintf(stderr, "Could not connect\n");
 					exit_error("could not connect to host %s\n", optarg);
 				}
 
@@ -254,7 +249,7 @@ int main(int argc, char *argv[]) {
 	alsaplayer_init(&snapctx.alsaplayer_ctx);
 
 	intercom_init(&snapctx.intercom_ctx);
-	intercom_hello(&snapctx.intercom_ctx, &snapctx.intercom_ctx.serverip, snapctx.intercom_ctx.serverport);
+	intercom_hello(&snapctx.intercom_ctx, &snapctx.intercom_ctx.serverip, snapctx.intercom_ctx.port);
 
 	// we have realtime business when feeding the alsa buffer, setting prio may help on an otherwise busy client.
 	if (setpriority(PRIO_PROCESS, 0, -5)) {

@@ -75,18 +75,30 @@ void intercom_init(intercom_ctx *ctx) {
 	ctx->bufferrindex = 0;
 	ctx->buffer = 0;
 
-	struct sockaddr_in6 server_addr = {
-	    .sin6_family = AF_INET6, .sin6_port = htons(ctx->port),
-	};
-
 	ctx->fd = socket(PF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0);
 	if (ctx->fd < 0)
 		exit_error("creating socket for intercom on node-IP");
 
-	// TODO: clients should connect() server should bind. How do we know when called as server?
-	if (bind(ctx->fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-		perror("bind socket to node-IP failed");
-		exit(EXIT_FAILURE);
+	struct sockaddr_in6 server_addr = {
+	    .sin6_family = AF_INET6, .sin6_port = htons(ctx->port),
+	};
+
+	switch (snapctx.operating_mode) {
+		case SERVER:
+			if (bind(ctx->fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+				perror("bind socket to node-IP failed");
+				exit(EXIT_FAILURE);
+			}
+			break;
+		case CLIENT:;
+			server_addr.sin6_addr = ctx->serverip;
+			if (connect(ctx->fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+				perror("connect socket to server-IP failed");
+				exit(EXIT_FAILURE);
+			}
+			break;
+		default:
+			exit_error("operating_mode unspecified. We have to run either in CLIENT or SERVER mode to initialize intercom.\n");
 	}
 }
 
@@ -416,7 +428,7 @@ void request_task(void *d) {
 			ndata->retries_left--;
 
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len,
-						     snapctx.intercom_ctx.serverport);
+						     snapctx.intercom_ctx.port);
 			schedule_request(ndata, 0, 100, request_task);
 		} else {
 			log_debug("Could not find request for id %lu - it was most likely already served.\n", req_nonce);
@@ -523,8 +535,9 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 		if (hdr->type == SERVER_OPERATION)
 			intercom_handle_server_operation(ctx, (intercom_packet_sop *)packet, packet_len);
 
-		if (hdr->type == AUDIO_DATA)
+		if (hdr->type == AUDIO_DATA) {
 			intercom_handle_audio(ctx, (intercom_packet_audio *)packet, packet_len);
+		}
 
 	} else {
 		log_error(
@@ -655,8 +668,7 @@ void hello_task(void *d) {
 
 	packet_len += assemble_hello((void *)(&data->packet[packet_len]));
 
-	intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len,
-				     snapctx.intercom_ctx.serverport);
+	intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len, snapctx.intercom_ctx.port);
 	schedule_hellos(data, 1, 500, hello_task);
 }
 

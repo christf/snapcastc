@@ -227,7 +227,6 @@ int main(int argc, char *argv[]) {
 
 	snapctx.intercom_ctx.mtu = 1500;
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
-	snapctx.intercom_ctx.serverport = INTERCOM_PORT;
 
 	snapctx.samples = 48000;		// set default
 	snapctx.frame_size = 2;			// set default

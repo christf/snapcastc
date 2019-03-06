@@ -97,8 +97,7 @@ typedef struct {
 	VECTOR(audio_packet) packet_buffer;
 	int fd;
 	uint16_t port;
-	int16_t controlport;
-	uint16_t serverport;
+	uint16_t controlport;
 	uint32_t nodeid;
 	int mtu;
 	int buffer_wraparound;
