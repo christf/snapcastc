@@ -5,6 +5,7 @@
 #include "util.h"
 
 #include <alsa/asoundlib.h>
+#include <math.h>
 #include <rubberband/rubberband-c.h>
 #include <stdio.h>
 
@@ -333,8 +334,9 @@ uint8_t obtain_volume(alsaplayer_ctx *ctx) {
 	mixer_init(ctx);
 	snd_mixer_selem_get_playback_volume(ctx->mixer_elem, SND_MIXER_SCHN_MONO, &volume);
 	mixer_uninit(ctx);
-	log_debug("Obtained volume (raw): %lu, Max value (raw): %lu, Volume (percent): %lu\n", volume, ctx->mixer_max, volume * 100 / ctx->mixer_max);
-	return (uint8_t)((int)volume * 100 / ctx->mixer_max);
+	uint8_t ret = (uint8_t)(round((double)volume * 100 / ctx->mixer_max));
+	log_debug("Obtained volume (raw): %d\n", ret);
+	return ret;
 }
 
 void adjustVolume(alsaplayer_ctx *ctx, uint8_t volume) {
