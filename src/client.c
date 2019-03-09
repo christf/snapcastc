@@ -70,6 +70,7 @@ int alsa_get_fd_amount() {
 	    .rate = 48000,
 	    .pcm.name = strdupa(snapctx.alsaplayer_ctx.pcm.name),
 	    .card = strdupa(snapctx.alsaplayer_ctx.card),
+	    .mixer = strdupa(snapctx.alsaplayer_ctx.mixer),
 	};
 	alsaplayer_init(&aplay_tmp_ctx);
 

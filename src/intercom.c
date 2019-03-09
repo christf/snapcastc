@@ -543,6 +543,7 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 		snapctx.alsaplayer_ctx.frame_size = chunk.frame_size;
 		snapctx.alsaplayer_ctx.channels = chunk.channels;
 		snapctx.alsaplayer_ctx.rate = chunk.samples;
+
 		alsaplayer_init(&snapctx.alsaplayer_ctx);
 		init_alsafd(&snapctx.alsaplayer_ctx);
 	}

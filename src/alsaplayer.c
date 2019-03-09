@@ -187,8 +187,10 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	chunk.channels = ctx->channels;
 	chunk.frame_size = ctx->frame_size;
 
-	if (snd_pcm_delay(ctx->pcm_handle, &delayp) < 0)
+	if (snd_pcm_delay(ctx->pcm_handle, &delayp) < 0) {
 		log_verbose("could not obtain pcm delay\n");
+		delayp = 0; // set default
+	}
 
 	int ret;
 
@@ -284,6 +286,8 @@ void alsaplayer_pcm_list() {
 void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	if (!ctx->initialized)
 		return;
+
+	snd_pcm_nonblock(ctx->pcm_handle, 0);
 	snd_pcm_drain(ctx->pcm_handle);
 	snd_pcm_close(ctx->pcm_handle);
 	ctx->initialized = ctx->playing = false;
@@ -298,6 +302,7 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 			log_verbose("uninitializing alsa fd %d on index %d\n", ctx->main_poll_fd[i].fd, i);
 			ctx->main_poll_fd[i].fd = -(ctx->main_poll_fd[i]).fd;
 		}
+	ctx = NULL;
 }
 
 void init_alsafd(alsaplayer_ctx *ctx) {
@@ -347,6 +352,7 @@ void adjustVolume(alsaplayer_ctx *ctx, uint8_t volume) {
 
 void alsaplayer_init(alsaplayer_ctx *ctx) {
 	unsigned int pcm, tmp;
+	snd_pcm_uframes_t buffer_size;
 	int err;
 
 	ctx->empty_chunks_in_row = 0;
@@ -388,9 +394,6 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	if ((pcm = snd_pcm_hw_params_set_format(ctx->pcm_handle, ctx->params, snd_pcm_format)) < 0)
 		log_error("ERROR: Can't set format. %s\n", snd_strerror(pcm));
 
-	if ((pcm = snd_pcm_hw_params_set_format(ctx->pcm_handle, ctx->params, snd_pcm_format)) < 0)
-		log_error("ERROR: Can't set format. %s\n", snd_strerror(pcm));
-
 	if ((pcm = snd_pcm_hw_params_set_channels(ctx->pcm_handle, ctx->params, ctx->channels)) < 0)
 		log_error("ERROR: Can't set channels number. %s\n", snd_strerror(pcm));
 
@@ -426,6 +429,8 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	snd_pcm_hw_params_get_period_time(ctx->params, &tmp, NULL);
 	log_verbose("period time: %d\n", tmp);
 
+	snd_pcm_hw_params_get_buffer_size(ctx->params, &buffer_size);
+
 	ctx->pollfd_count = snd_pcm_poll_descriptors_count(ctx->pcm_handle);
 	assert(ctx->pollfd_count > 0);
 
@@ -441,7 +446,8 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 
 	snd_pcm_sw_params_set_avail_min(ctx->pcm_handle, ctx->swparams, ctx->frames);
 
-	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, ctx->swparams, ctx->frames);
+	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, ctx->swparams, buffer_size);
+	log_verbose("start threshold ist: %d\n", buffer_size);
 
 	snd_pcm_sw_params(ctx->pcm_handle, ctx->swparams);
 	ctx->initialized = true;
