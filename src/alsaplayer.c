@@ -130,10 +130,12 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		get_emptychunk(p, timespec_isnear(&ts_alsa_ready, &nextchunk_playat, 120) ? tdiff.time.tv_nsec / 1000000L : 120);
 	}
 
-	if (!is_near) {
-
-		if (chunk_getduration_ms(p))
-			factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 1000 + tdiff.time.tv_nsec / 1000000L) / chunk_getduration_ms(p))));
+		if ( (! is_near) && chunk_getduration_ms(p)) {
+			nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
+			ts_alsa_ready = timeAddMs(&ts_alsa_ready, chunk_getduration_ms(p));
+			tdiff = timeSub(&ts_alsa_ready, &nextchunk_playat);
+			factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 100 + tdiff.time.tv_nsec / 100000L) / chunk_getduration_ms(p) / 10)));
+		}
 		if (factor > 2)
 			factor = 2;
 		if (factor < 0.5)
@@ -166,6 +168,9 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 				}
 			}
 		}
+	} else {
+		get_emptychunk(p, timespec_isnear(&ts_alsa_ready, &nextchunk_playat, 120) ? tdiff.time.tv_nsec / 1000000L : 120);
+		log_error("generated empty chunk of size %d\n", timespec_isnear(&ts_alsa_ready, &nextchunk_playat, 120) ? tdiff.time.tv_nsec / 1000000L : 120);
 	}
 
 	if (!chunk_is_empty(p))  // Do not stretch, when chunk contains only silence, save some CPU

@@ -498,13 +498,19 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 	size_t this_seqno = ntohl(packet->hdr.nonce);
 
 	// when buffer is empty, it may not have been initialized and thus the server may have adjusted its chunk size.
+	log_debug("handling audio data\n");
 	if (!ringbuffer_fill(ctx)) {
+		log_error("buffer empty\n");
 		chunk_decode(&chunk);
 		realloc_intercom_buffer_when_required(ctx, ntohs(packet->bufferms), chunk_getduration_ms(&chunk));
 	}
 
-	log_debug("read chunk from packet: %d samples: %d frame size:%d  channels: %d packet_len: %d, hdrsize: %d\n\n", chunk.size, chunk.samples,
-		  chunk.frame_size, chunk.channels, packet_len, sizeof(intercom_packet_audio));
+	struct timespec play_at = {
+	    .tv_sec = chunk.play_at_tv_sec, .tv_nsec = chunk.play_at_tv_nsec,
+	};
+
+	log_verbose("read chunk from packet: %d samples: %d frame size:%d  channels: %d packet_len: %d, hdrsize: %d, play_at %s\n", chunk.size,
+		    chunk.samples, chunk.frame_size, chunk.channels, packet_len, sizeof(intercom_packet_audio), print_timespec(&play_at));
 	// print_packet((void*)pchunk, 17);
 
 	if (!is_next_chunk(this_seqno) && this_seqno - ctx->lastreceviedseqno < 1000) {
@@ -522,14 +528,20 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 		}
 	}
 
-	if (this_seqno > ctx->lastreceviedseqno) {
-		intercom_put_chunk(ctx, &chunk);
-		ctx->lastreceviedseqno = this_seqno;
-	} else {
-		if (remove_request(this_seqno)) {
+	struct timespec ctime;
+	obtainsystime(&ctime);
+
+	if (timespec_cmp(play_at, ctime) > 0) {
+		if (this_seqno > ctx->lastreceviedseqno) {
+			log_debug("storing chunk\n");
+			intercom_put_chunk(ctx, &chunk);
+			ctx->lastreceviedseqno = this_seqno;
+		} else if (remove_request(this_seqno)) {
 			log_error("Processing out of order audio with seqno: %lu\n", this_seqno);
 			intercom_put_chunk_locate(ctx, &chunk);
 		}
+	} else {
+		log_error("discarding chunk - too late to play\n");
 	}
 
 	if (chunk.frame_size != snapctx.alsaplayer_ctx.frame_size || (chunk.channels != snapctx.alsaplayer_ctx.channels) ||
@@ -564,9 +576,8 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 		if (hdr->type == SERVER_OPERATION)
 			intercom_handle_server_operation(ctx, (intercom_packet_sop *)packet, packet_len);
 
-		if (hdr->type == AUDIO_DATA) {
+		if (hdr->type == AUDIO_DATA)
 			intercom_handle_audio(ctx, (intercom_packet_audio *)packet, packet_len);
-		}
 
 	} else {
 		log_error(
