@@ -14,6 +14,7 @@
 #include "timespec.h"
 
 #define PERIOD_TIME 30000
+#define NEAR_MS 1
 
 // librubberband may get more interesting when compressing data. feeding 2048 samples at a time is out of question when using PCM, UDP and 16 Bit 2
 // Channel
@@ -73,7 +74,18 @@ void adjust_speed_simple(pcmChunk *chunk, double factor) {
 	}
 }
 
-void adjust_speed(pcmChunk *chunk, double factor) {
+void adjust_speed(pcmChunk *chunk, struct timespec ts_alsa_ready) {
+	double factor = 1;
+	struct timespec nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
+	ts_alsa_ready = timeAddMs(&ts_alsa_ready, chunk_getduration_ms(chunk));
+	timediff tdiff = timeSub(&ts_alsa_ready, &nextchunk_playat);
+
+	factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 100 + tdiff.time.tv_nsec / 100000L) / chunk_getduration_ms(chunk) / 10)));
+	if (factor > 2)
+		factor = 2;
+	if (factor < 0.5)
+		factor = 0.5;
+
 	// TODO: should we be able to select this via cli option?
 	// adjust_speed_simple(chunk, factor);
 	adjust_speed_soxr(chunk, factor);
@@ -91,24 +103,40 @@ void decode_first_input(void *d) {
 	chunk_decode(p);
 }
 
+int timing_off_drop_or_silence_chunk(pcmChunk *p, const timediff *tdiff) {
+	log_error("Timing is not even close, ");
+	if (tdiff->sign < 0) {
+		log_error("we are ahead by %s seconds, replacing data with silence, stopping playback and re-adjusting timing.\n",
+			  print_timespec(&tdiff->time));
+		memset(p->data, 0, p->size);
+		p->play_at_tv_sec = 0;
+
+		snapctx.alsaplayer_ctx.playing = false;
+		snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
+	} else {
+		log_error("we are behind by %s seconds: dropping this chunk!\n", print_timespec(&tdiff->time));
+		p->size = 0;
+		p->play_at_tv_sec = 0;
+		chunk_free_members(p);
+	}
+	return -1;
+}
+
 int getchunk(pcmChunk *p, size_t delay_frames) {
-	double factor = 1;
 	struct timespec ctime;
 	obtainsystime(&ctime);
-	struct timespec ts_alsa_ready = ctime;
 
-	int near_ms = 1;
 	int not_even_close_ms;
 
 	struct timespec nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
 
 	size_t delay_ms_alsa = delay_frames * 1000 / snapctx.alsaplayer_ctx.rate;
 
-	ts_alsa_ready = timeAddMs(&ts_alsa_ready, delay_ms_alsa + snapctx.alsaplayer_ctx.latency_ms);
+	const struct timespec ts_alsa_ready = timeAddMs(&ctime, delay_ms_alsa + snapctx.alsaplayer_ctx.latency_ms);
 
 	timediff tdiff = timeSub(&ts_alsa_ready, &nextchunk_playat);
 
-	bool is_near = timespec_isnear(&ts_alsa_ready, &nextchunk_playat, near_ms);
+	bool is_near = timespec_isnear(&ts_alsa_ready, &nextchunk_playat, NEAR_MS);
 	bool attempting_start_and_overshot = ((!snapctx.alsaplayer_ctx.playing) && (timespec_cmp(ts_alsa_ready, nextchunk_playat) >= 0));
 
 	if (snapctx.alsaplayer_ctx.playing || (attempting_start_and_overshot) || is_near) {
@@ -123,62 +151,25 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
 					(int)(1.2 * snapctx.bufferms) % 1000);
 
-			chunk_decode(p);
 			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
 		}
+
+		not_even_close_ms = max(NOT_EVEN_CLOSE_MS, chunk_getduration_ms(p));
+		bool not_even_close = !(tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
+
+		if (not_even_close && (!chunk_is_empty(p)))
+			return timing_off_drop_or_silence_chunk(p, &tdiff);
+
+		chunk_decode(p);
+		if ((!is_near) && chunk_getduration_ms(p) && !chunk_is_empty(p))
+			adjust_speed(p, ts_alsa_ready);
 	} else {
 		get_emptychunk(p, timespec_isnear(&ts_alsa_ready, &nextchunk_playat, 120) ? tdiff.time.tv_nsec / 1000000L : 120);
 	}
 
-		if ( (! is_near) && chunk_getduration_ms(p)) {
-			nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
-			ts_alsa_ready = timeAddMs(&ts_alsa_ready, chunk_getduration_ms(p));
-			tdiff = timeSub(&ts_alsa_ready, &nextchunk_playat);
-			factor = (1 - (tdiff.sign * ((double)(tdiff.time.tv_sec * 100 + tdiff.time.tv_nsec / 100000L) / chunk_getduration_ms(p) / 10)));
-		}
-		if (factor > 2)
-			factor = 2;
-		if (factor < 0.5)
-			factor = 0.5;
-
-		not_even_close_ms = max(NOT_EVEN_CLOSE_MS, chunk_getduration_ms(p) / 2);
-
-		bool not_even_close = (tdiff.time.tv_sec == 0 && tdiff.time.tv_nsec < not_even_close_ms * 1000000L);
-		if (!not_even_close) {
-			log_error("Timing is not even close, ");
-			if (tdiff.sign < 0) {
-				log_error("we are ahead by %s seconds\n", print_timespec(&tdiff.time));
-				if (!chunk_is_empty(p)) {
-					memset(p->data, 0, p->size);
-					p->play_at_tv_sec = 0;
-					log_error("replacing data with silence\n");
-				}
-
-				snapctx.alsaplayer_ctx.playing = false;
-				snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
-			} else {
-				if (p->play_at_tv_sec > 0) {
-					log_error("we are behind by %s seconds: dropping this chunk!\n", print_timespec(&tdiff.time));
-					p->size = 0;
-					p->play_at_tv_sec = 0;
-					chunk_free_members(p);
-					return -1;
-				} else {
-					log_error(" playing empty chunk\n");
-				}
-			}
-		}
-	} else {
-		get_emptychunk(p, timespec_isnear(&ts_alsa_ready, &nextchunk_playat, 120) ? tdiff.time.tv_nsec / 1000000L : 120);
-		log_error("generated empty chunk of size %d\n", timespec_isnear(&ts_alsa_ready, &nextchunk_playat, 120) ? tdiff.time.tv_nsec / 1000000L : 120);
-	}
-
-	if (!chunk_is_empty(p))  // Do not stretch, when chunk contains only silence, save some CPU
-		adjust_speed(p, factor);
-
-	log_verbose("status: %d factor: %f chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d empty %d\n",
-		    snapctx.alsaplayer_ctx.playing, factor, p->size, print_timespec(&ctime), print_timespec(&ts_alsa_ready),
-		    print_timespec(&tdiff.time), tdiff.sign, chunk_is_empty(p));
+	log_verbose("status: %d chunk: chunksize: %d current time: %s, play_at: %s difference: %s sign: %d empty %d\n",
+		    snapctx.alsaplayer_ctx.playing, p->size, print_timespec(&ctime), print_timespec(&ts_alsa_ready), print_timespec(&tdiff.time),
+		    tdiff.sign, chunk_is_empty(p));
 
 	return p->size;
 }
@@ -194,7 +185,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 
 	if (snd_pcm_delay(ctx->pcm_handle, &delayp) < 0) {
 		log_verbose("could not obtain pcm delay\n");
-		delayp = 0; // set default
+		delayp = 0;  // set default
 	}
 
 	int ret;

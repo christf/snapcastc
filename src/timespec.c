@@ -5,7 +5,7 @@
 
 #define BILLION 1000000000UL
 
-struct timespec timeAdd(struct timespec *t1, struct timespec *t2) {
+struct timespec timeAdd(const struct timespec *t1, const struct timespec *t2) {
 	long sec = t2->tv_sec + t1->tv_sec;
 	long nsec = t2->tv_nsec + t1->tv_nsec;
 	while (nsec >= BILLION) {
@@ -15,7 +15,7 @@ struct timespec timeAdd(struct timespec *t1, struct timespec *t2) {
 	return (struct timespec){.tv_sec = sec, .tv_nsec = nsec};
 }
 
-int timespec_isnear(struct timespec *t1, struct timespec *t2, int chunkms) {
+int timespec_isnear(const struct timespec *t1, const struct timespec *t2, const int chunkms) {
 	struct timespec tmp;
 
 	tmp = *t1;
@@ -66,7 +66,7 @@ timediff timeSub(const struct timespec *t1, const struct timespec *t2) {
 	return ret;
 }
 
-struct timespec timeAddMs(struct timespec *t1, int ms) {
+struct timespec timeAddMs(const struct timespec *t1, const int ms) {
 	struct timespec t2;
 	t2.tv_sec = ms / 1000;
 	t2.tv_nsec = (ms % 1000) * 1000000l;
