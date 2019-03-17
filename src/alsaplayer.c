@@ -91,12 +91,6 @@ void adjust_speed(pcmChunk *chunk, struct timespec ts_alsa_ready) {
 	adjust_speed_soxr(chunk, factor);
 }
 
-int max(int a, int b) {
-	if (a > b)
-		return a;
-	return b;
-}
-
 void decode_first_input(void *d) {
 	pcmChunk *p;
 	intercom_peeknextaudiochunk(&snapctx.intercom_ctx, &p);

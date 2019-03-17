@@ -13,6 +13,12 @@
 static char strbuffer[STRBUFELEMENTS][INET6_ADDRSTRLEN + 1];
 static int str_bufferoffset = 0;
 
+int max(const int a, const int b) {
+	if (a > b)
+		return a;
+	return b;
+}
+
 /* print a human-readable representation of an in6_addr struct to string buffer which can then be printed to wherever
 ** ** */
 const char *print_ip(const struct in6_addr *addr) {
