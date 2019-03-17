@@ -48,6 +48,7 @@ typedef struct {
 	uint16_t chunksize;
 	uint32_t pipelength_ms;
 	struct timespec lastchunk;
+	bool initialized;
 	taskqueue_t *idle_task;
 } inputpipe_ctx;
 
@@ -56,5 +57,6 @@ typedef struct {
  * @return -1 on buffer overrun, 1 on chunk complete, 0 otherwise
  */
 int inputpipe_handle(inputpipe_ctx *ctx);
+void inputpipe_resume_read(void *d);
 void inputpipe_uninit(inputpipe_ctx *ctx);
 void inputpipe_init(inputpipe_ctx *ctx);

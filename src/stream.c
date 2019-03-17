@@ -1,20 +1,21 @@
-#include "snapcast.h"
 #include "stream.h"
 #include "alloc.h"
-#include "util.h"
 #include "intercom.h"
+#include "snapcast.h"
+#include "util.h"
+
+#include "clientmgr.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 #define PROTOCOL_DELIMITER "://"
 
-
 // TODO: get rid of these hard-coded values. This is an accident waiting to happen
+//
+// this is the overhead of ipv6
 #define IPOVERHEAD_BYTES 40
 #define UDPOVERHEAD_BYTES 8
-#define PCMCHUNK_HEADER_SIZE 17
-
 
 int stream_free_members(stream *s) {
 	free(s->inputpipe.fname);
@@ -30,10 +31,31 @@ int parse_codec(const char *codec) {
 		return PCM;
 }
 
+stream *stream_find(const client_t *client) {
+	for (int s = 0; s < VECTOR_LEN(snapctx.streams); s++) {
+		stream *stream = &VECTOR_INDEX(snapctx.streams, s);
+		for (int i = 0; i < VECTOR_LEN(stream->clients); i++) {
+			client_t *sc = &VECTOR_INDEX(stream->clients, i);
+			if (!client_cmp(client, sc))
+				return stream;
+		}
+	}
+	return NULL;
+}
+
+stream *stream_find_fd(int fd) {
+	for (int i = VECTOR_LEN(snapctx.streams) - 1; i >= 0; --i) {
+		stream *s = &VECTOR_INDEX(snapctx.streams, i);
+		if (fd == s->inputpipe.fd)
+			return s;
+	}
+	return NULL;
+}
+
 bool stream_parse(stream *s, const char *raw) {
 	char *token = NULL;
-	char *value  = NULL;
-	char *optionctx  = NULL;
+	char *value = NULL;
+	char *optionctx = NULL;
 	char *valuectx = NULL;
 
 	s->raw = strdup(raw);
@@ -72,8 +94,7 @@ bool stream_parse(stream *s, const char *raw) {
 				s->inputpipe.samplesize = atol(value) / 8;
 				value = strtok_r(NULL, ":", &valuectx);
 				s->inputpipe.channels = atol(value);
-			}
-			else if (!strcmp(token, "timeout_ms"))
+			} else if (!strcmp(token, "timeout_ms"))
 				s->inputpipe.pipelength_ms = atoi(value);
 			else {
 				log_error("unknown option - bailing out\n");
@@ -85,8 +106,16 @@ bool stream_parse(stream *s, const char *raw) {
 	strcpy(s->raw, raw);
 	log_debug("raw: %s\n", s->raw);
 
-	s->opuscodec_ctx.bitrate = 96000; // set default
-	opus_init_encoder(&s->opuscodec_ctx, snapctx.intercom_ctx.mtu - IPOVERHEAD_BYTES - sizeof(intercom_packet_hdr) - PCMCHUNK_HEADER_SIZE - UDPOVERHEAD_BYTES, s->inputpipe.samples, s->inputpipe.channels);
+	s->opuscodec_ctx.bitrate = 96000;  // set default
+	opus_init_encoder(&s->opuscodec_ctx,
+			  snapctx.intercom_ctx.mtu - IPOVERHEAD_BYTES - sizeof(intercom_packet_hdr) - CHUNK_HEADER_SIZE - UDPOVERHEAD_BYTES,
+			  s->inputpipe.samples, s->inputpipe.channels);
 	return true;
+}
+
+void stream_init(stream *s) {
+	VECTOR_INIT(s->clients);
+	VECTOR_INIT(s->packet_buffer);
+	s->nonce = 0;
 }
 

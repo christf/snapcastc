@@ -1,10 +1,14 @@
 #include "clientmgr.h"
+#include "inputpipe.h"
 #include "alloc.h"
+#include "inputpipe.h"
 #include "intercom.h"
+#include "packet_types.h"
 #include "snapcast.h"
 #include "stream.h"
 #include "syscallwrappers.h"
 #include "util.h"
+#include "vector.h"
 
 #include <netdb.h>
 #include <string.h>
@@ -12,29 +16,16 @@
 /** Given a client name returns a client object.
 **   Returns NULL if the client is not known.
 **/
-struct client *findinvector(void *_vector, const uint32_t id) {
-	VECTOR(struct client) *vector = _vector;
-	for (int _vector_index = VECTOR_LEN(*vector) - 1; _vector_index >= 0; _vector_index--) {
-		struct client *e = &VECTOR_INDEX(*vector, _vector_index);
-
-		if (id == e->id)
-			return e;
-	}
-
-	return NULL;
-}
-
 void clientmgr_send_audio_buffer_to_client(client_t *client) {
-	for (int i = 0; i < VECTOR_LEN(snapctx.intercom_ctx.packet_buffer); ++i) {
+	stream *s = stream_find(client);
+	for (int i = 0; i < VECTOR_LEN(s->packet_buffer); ++i) {
 		log_verbose("sending packet %d to %s\n", i, print_ip(&client->ip));
-		audio_packet *ap = &VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, i);
+		audio_packet *ap = &VECTOR_INDEX(s->packet_buffer, i);
 		intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, ap->data, ap->len, client->port);
 	}
 }
 
-bool clientmgr_client_refreshvolume(client_t *client, uint8_t volume) {
-	intercom_set_volume(&snapctx.intercom_ctx, &client->ip, client->port, volume);
-}
+bool clientmgr_client_refreshvolume(client_t *client, uint8_t volume) { intercom_set_volume(&snapctx.intercom_ctx, client, volume); }
 
 bool clientmgr_client_setmute(client_t *c, bool mute) {
 	bool mute_changed = false;
@@ -44,31 +35,23 @@ bool clientmgr_client_setmute(client_t *c, bool mute) {
 	}
 
 	if (mute)
-		intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
+		intercom_stop_client(&snapctx.intercom_ctx, c);
 	else if ((!mute) && mute_changed)
 		clientmgr_send_audio_buffer_to_client(c);
 
 	return true;
 }
 
-void clientmgr_stop_clients_for_stream(stream *s) {
-	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
-		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
-		if (c->stream == s)
-			intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
-	}
-}
-
-void clientmgr_stop_clients() {
-	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
-		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
-		intercom_stop_client(&snapctx.intercom_ctx, &c->ip, c->port);
+void clientmgr_stop_clients(stream *s) {
+	for (int i = VECTOR_LEN(s->clients) - 1; i >= 0; i--) {
+		struct client *c = &VECTOR_INDEX(s->clients, i);
+		intercom_stop_client(&snapctx.intercom_ctx, c);
 	}
 }
 
 void schedule_delete_client(void *d) {
-	uint32_t *id = d;
-	clientmgr_delete_client(&snapctx.clientmgr_ctx, *id);
+	struct delete_client_data *data = (struct delete_client_data *)d;
+	clientmgr_delete_client(data->id);
 }
 
 client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip, const uint16_t port) {
@@ -91,55 +74,55 @@ client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip
 	memcpy(&ret->ip, ip, sizeof(struct in6_addr));
 	ret->id = id;
 
-	uint32_t *cid = snap_alloc(sizeof(uint32_t));
-	*cid = id;
-	ret->purge_task = post_task(&snapctx.taskqueue_ctx, 5, 0, schedule_delete_client, free, cid);
+	struct delete_client_data *data = snap_alloc(sizeof(struct delete_client_data));
+	data->id = id;
 
-	VECTOR_ADD(snapctx.clientmgr_ctx.clients, *ret);
+	ret->purge_task = post_task(&snapctx.taskqueue_ctx, 5, 0, schedule_delete_client, free, data);
+	
+	VECTOR_ADD(VECTOR_INDEX(snapctx.streams, 0).clients, *ret);
 
 	return ret;
 }
 
-struct client *get_client(const uint32_t id) {
-	return findinvector(&snapctx.clientmgr_ctx.clients, id);
+struct client *get_client(stream *s, const uint32_t id) {
+	client_vector *vector = &s->clients;
+	client_t key = {.id = id};
+	return VECTOR_LSEARCH(&key, *vector, client_cmp);
 }
 
 void print_client(struct client *client) {
 	log_verbose("Client %s(%u) has IP %s, port %i\n", client->name, client->id, print_ip(&client->ip), client->port);
 }
 
-/** Given a MAC address deletes a client. Safe to call if the client is not
-**   known.
-**     */
-void clientmgr_delete_client(clientmgr_ctx *ctx, const uint32_t id) {
-	// TODO: do not parse the vector twice to get the client once and the index on the second run.
-	struct client *client = get_client(id);
+void delete_client_internal(stream *s, client_t *c) {
+	if (c && s) {
+		// TODO: when removing the last client, stop reading from this stream. On the first client on a stream, start processing the input
+		log_verbose("\033[34mREMOVING client %lu, %d clients left in stream.\033[0m\n", c->id, VECTOR_LEN(s->clients) - 1);
+		print_client(c);
 
-	if (client == NULL) {
-		log_debug("Client [%lu] unknown: cannot delete\n", id);
-		return;
-	}
+		int i = VECTOR_GETINDEX(s->clients, c);
+		VECTOR_DELETE(s->clients, i);
 
-	log_verbose("\033[34mREMOVING client %lu\033[0m\n", id);
-	print_client(client);
-
-	// TODO migrate to vector_lsearch
-	for (int i = VECTOR_LEN(ctx->clients) - 1; i >= 0; i--) {
-		if (VECTOR_INDEX(ctx->clients, i).id == id) {
-			VECTOR_DELETE(ctx->clients, i);
-			break;
-		}
+	} else {
+		log_debug("Client [%lu] unknown: cannot delete\n", c->id);
 	}
 }
 
+/** Given an id deletes a client. Safe to call if the client is not known.
+*/
+void clientmgr_delete_client(const uint32_t id) {
+	client_stream cs = find_client(id);
+
+	delete_client_internal(cs.stream, cs.client);
+}
 /** Remove all client routes - used when exiting
 ** **/
-void clientmgr_purge_clients(clientmgr_ctx *ctx) {
+void clientmgr_purge_clients(stream *s) {
 	struct client *client;
 
-	for (int i = VECTOR_LEN(ctx->clients) - 1; i >= 0; i--) {
-		client = &VECTOR_INDEX(ctx->clients, i);
-		clientmgr_delete_client(ctx, client->id);
+	for (int i = VECTOR_LEN(s->clients) - 1; i >= 0; i--) {
+		client = &VECTOR_INDEX(s->clients, i);
+		delete_client_internal(s, client);
 	}
 }
 
@@ -156,11 +139,28 @@ bool is_roughly(uint8_t a, uint8_t b) {
 	return false;
 }
 
+client_stream find_client(const uint32_t id) {
+	client_t *client = NULL;
+	client_stream cs = {};
+
+	for (int i = 0; i < VECTOR_LEN(snapctx.streams); ++i) {
+		client = get_client(&VECTOR_INDEX(snapctx.streams, i), id);
+		if (client) {
+			cs.stream = &VECTOR_INDEX(snapctx.streams, i);
+			cs.client = client;
+			break;
+		}
+	}
+
+	return cs;
+}
+
 bool clientmgr_refresh_client(struct client *client) {
 	if (!client)
 		return false;
 
-	client_t *existingclient = get_client(client->id);
+	client_t *existingclient = find_client(client->id).client;
+
 	struct timespec ctime;
 	obtainsystime(&ctime);
 
@@ -169,9 +169,12 @@ bool clientmgr_refresh_client(struct client *client) {
 		log_verbose("clientmgr: creating client: %lu\n", client->id);
 		client_t n_client = {};
 		new_client(&n_client, client->id, &client->ip, client->port);
-		existingclient = get_client(client->id);
 
-		existingclient->stream = &VECTOR_INDEX(snapctx.streams, 0);
+		stream *s = &VECTOR_INDEX(snapctx.streams, 0);
+		if ( (VECTOR_LEN(s->clients) == 1) && (s->inputpipe.state == IDLE) )
+			post_task(&snapctx.taskqueue_ctx, s->inputpipe.read_ms / 1000, s->inputpipe.read_ms % 1000, inputpipe_resume_read, NULL, s);
+
+		existingclient = get_client(&VECTOR_INDEX(snapctx.streams, 0), client->id);
 
 		existingclient->volume_percent = client->volume_percent;
 
@@ -204,4 +207,13 @@ bool clientmgr_refresh_client(struct client *client) {
 	return true;
 }
 
-void clientmgr_init() { VECTOR_INIT((&snapctx.clientmgr_ctx)->clients); }
+int client_cmp(const struct client *c1, const struct client *c2) {
+	if (c1->id > c2->id)
+		return 1;
+	else if (c1->id < c2->id)
+		return -1;
+	else
+		return 0;
+}
+
+void clientmgr_init() {}

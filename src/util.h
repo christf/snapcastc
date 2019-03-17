@@ -21,3 +21,7 @@ const char *print_codec(int codec);
 const char *print_stream_protocol(int protocol);
 const char *print_inputpipe_status(int status);
 const char *print_chunk(pcmChunk *chunk);
+
+void add_fd(int efd, int fd, uint32_t events);
+void del_fd(int efd, int fd);
+

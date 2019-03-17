@@ -90,6 +90,12 @@ int test_vector_init() {
 	return 0;
 }
 
+int pcmchunk_header() {
+	log_error("CHUNK_HEADER_SIZE: %d\n", CHUNK_HEADER_SIZE);
+	_assert (17 == CHUNK_HEADER_SIZE);
+	return 0;
+}
+
 int parse_streaminfo() {
 	char optarg[1024];
 	stream s = {};
@@ -123,6 +129,7 @@ int parse_streaminfo() {
 int all_tests() {
 	_verify(test_vector_init);
 	_verify(parse_streaminfo);
+	_verify(pcmchunk_header);
 	return 0;
 }
 

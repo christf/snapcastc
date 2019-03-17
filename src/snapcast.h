@@ -40,7 +40,6 @@ struct snapctx {
 
 	taskqueue_ctx taskqueue_ctx;
 	alsaplayer_ctx alsaplayer_ctx;
-	clientmgr_ctx clientmgr_ctx;
 	intercom_ctx intercom_ctx;
 	socket_ctx socket_ctx;
 
@@ -59,5 +58,3 @@ struct snapctx {
 
 extern snapctx_t snapctx;
 
-void add_fd(int efd, int fd, uint32_t events);
-void del_fd(int efd, int fd);

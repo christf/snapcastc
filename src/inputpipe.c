@@ -32,6 +32,7 @@
 #include "timespec.h"
 #include "util.h"
 
+#include <sys/epoll.h>
 #include <fcntl.h>
 #include <stdbool.h>
 #include <string.h>
@@ -91,14 +92,19 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		play_at.tv_sec = ctx->chunk.play_at_tv_sec;
 		play_at.tv_nsec = ctx->chunk.play_at_tv_nsec;
 
+		if (timespec_cmp(ctime, play_at) > 0) {
+			log_error("We are horribly late when reading from the pipes - re-adjusting the play_at timestamp to current time.\n");
+			play_at = ctime;
+		}
+
 		play_at = timeAddMs(&play_at, ctx->read_ms);
 		timediff t = timeSub(&ctime, &play_at);
 		ctx->chunk.play_at_tv_sec = play_at.tv_sec;
 		ctx->chunk.play_at_tv_nsec = play_at.tv_nsec;
 		ctx->lastchunk = play_at;
 
-		log_verbose("read %lu Bytes of data from %s, last read was %lu, reader state: %s, to be played at %s, current time %s, diff: %s\n",
-			    ctx->data_read, ctx->fname, count, print_inputpipe_status(ctx->state), print_timespec(&play_at), print_timespec(&ctime),
+		log_verbose("read %lu Bytes of data from %s, last read was %lu, reader state: %s, to be played at %s, current time %s, diff: %c%s\n",
+			    ctx->data_read, ctx->fname, count, print_inputpipe_status(ctx->state), print_timespec(&play_at), print_timespec(&ctime), t.sign < 0 ? '-' : ' ', 
 			    print_timespec(&t.time));
 		ctx->chunk.size = ctx->data_read;
 		ctx->chunk.frame_size = ctx->samplesize;
@@ -111,6 +117,14 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		return 1;
 	}
 	return 0;
+}
+
+
+void inputpipe_resume_read(void *d) {
+	log_debug("resuming reading from pipe\n");
+	stream *st = (stream *)d;
+	inputpipe_init(&st->inputpipe);
+	add_fd(snapctx.efd, st->inputpipe.fd, EPOLLIN);
 }
 
 void inputpipe_uninit(inputpipe_ctx *ctx) {
@@ -131,5 +145,8 @@ void inputpipe_init(inputpipe_ctx *ctx) {
 	ctx->chunk.frame_size = ctx->samplesize;
 	ctx->chunk.channels = ctx->channels;
 	ctx->data_read = 0;
-	ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
+	if (!ctx->initialized) {
+		ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
+		ctx->initialized = true;
+	}
 }

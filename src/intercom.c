@@ -3,6 +3,7 @@
 #include "alsaplayer.h"
 #include "error.h"
 #include "snapcast.h"
+#include "stream.h"
 #include "syscallwrappers.h"
 #include "timespec.h"
 #include "util.h"
@@ -27,10 +28,7 @@
 
 uint32_t nonce = 0;
 
-void schedule_request(struct intercom_task *data, int s_timeout, int ms_timeout, void (*processor)(void *data));
-void schedule_hellos(struct intercom_task *data, int s_timeout, int ms_timeout, void (*processor)(void *data));
-
-uint32_t get_nonce() { return htonl((nonce++ % NONCE_MAX)); }
+uint32_t get_nonce(uint32_t *nonce) { return htonl(((*nonce)++ % NONCE_MAX)); }
 
 int ringbuffer_getnextindex(intercom_ctx *ctx, int i) { return (i + 1) % ctx->buffer_elements; }
 
@@ -104,11 +102,11 @@ void intercom_init(intercom_ctx *ctx) {
 	}
 }
 
-int assemble_header(intercom_packet_hdr *hdr, uint8_t type) {
+int assemble_header(intercom_packet_hdr *hdr, uint8_t type, uint32_t *nonce, uint16_t clientid) {
 	hdr->version = PACKET_FORMAT_VERSION;
 	hdr->type = type;
-	hdr->empty = 0;
-	hdr->nonce = get_nonce();
+	hdr->clientid = htons(clientid);
+	hdr->nonce = get_nonce(nonce);
 	return sizeof(intercom_packet_hdr);
 }
 
@@ -182,6 +180,7 @@ bool intercom_recently_seen(intercom_ctx *ctx, intercom_packet_hdr *hdr) {
 }
 
 void intercom_recently_seen_add(intercom_ctx *ctx, intercom_packet_hdr *hdr) {
+	// TODO: sender IP / port must be considered
 	while (VECTOR_LEN(ctx->recent_packets) > INTERCOM_MAX_RECENT) VECTOR_DELETE(ctx->recent_packets, 0);
 
 	VECTOR_ADD(ctx->recent_packets, *hdr);
@@ -248,15 +247,18 @@ bool intercom_handle_client_operation(intercom_ctx *ctx, intercom_packet_op *pac
 				client.port = port;
 				clientmgr_refresh_client(&client);
 				break;
-			case REQUEST:
+			case REQUEST:;
+				stream *s = find_client(ntohs(packet->hdr.clientid)).stream;
 				currentoffset += parse_request(packetpointer, &nonce);
-				audio_packet key = {.nonce = nonce};
-				audio_packet *ap = VECTOR_LSEARCH(&key, snapctx.intercom_ctx.packet_buffer, cmp_audiopacket);
-				if (ap) {
-					intercom_send_packet_unicast(ctx, peer, ap->data, ap->len, port);
-					log_error("RE-SENT PACKET WITH id %lu\n", nonce);
-				} else {
-					log_error("could not satisfy request to re-send packet with id %lu\n", nonce);
+				if (s) {
+					audio_packet key = {.nonce = nonce};
+					audio_packet *ap = VECTOR_LSEARCH(&key, s->packet_buffer, cmp_audiopacket);
+					if (ap) {
+						intercom_send_packet_unicast(ctx, peer, ap->data, ap->len, port);
+						log_error("RE-SENT PACKET WITH id %lu\n", nonce);
+					} else {
+						log_error("could not satisfy request to re-send packet with id %lu\n", nonce);
+					}
 				}
 				break;
 			default:
@@ -430,7 +432,7 @@ void request_task(void *d) {
 	struct intercom_task *data = d;
 	struct intercom_task *ndata = snap_alloc0(sizeof(struct intercom_task));
 	intercom_packet_hdr *req = (intercom_packet_hdr *)data->packet;
-	req->nonce = get_nonce();
+	req->nonce = get_nonce(&nonce);
 
 	uint32_t req_nonce = get_nonce_from_tlv(&data->packet[sizeof(intercom_packet_hdr)]);
 
@@ -444,9 +446,10 @@ void request_task(void *d) {
 
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len,
 						     snapctx.intercom_ctx.port);
-			schedule_request(ndata, 0, 100, request_task);
+			ndata->check_task = post_task(&snapctx.taskqueue_ctx, 0, 100, request_task, free, ndata);
 		} else {
 			log_debug("Could not find request for id %lu - it was most likely already served.\n", req_nonce);
+			remove_request(req_nonce);
 		}
 	} else {
 		log_error("no more retries left for packet with id %lu - we are missing data due to shaky network. This will be audible.\n",
@@ -459,7 +462,7 @@ void intercom_send_request(intercom_ctx *ctx, audio_packet *mp) {
 	struct intercom_task *data = snap_alloc0(sizeof(struct intercom_task));
 	data->packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_request));
 
-	data->packet_len = assemble_header(&((intercom_packet_op *)data->packet)->hdr, CLIENT_OPERATION);
+	data->packet_len = assemble_header(&((intercom_packet_op *)data->packet)->hdr, CLIENT_OPERATION, &nonce, ctx->nodeid);
 	data->packet_len += assemble_request(&data->packet[data->packet_len], mp->nonce);
 	log_debug("assembling request packet for nonce: %lu\n", mp->nonce);
 
@@ -480,6 +483,16 @@ bool is_next_chunk(uint32_t seq) {
 	return (((seq == 0) && (ctx->lastreceviedseqno == NONCE_MAX)) ||
 		((seq - 1) == ctx->lastreceviedseqno && ctx->lastreceviedseqno != NONCE_MAX));
 };
+
+void limit_missing_packets(intercom_ctx *ctx, int maxsize) {
+	while (VECTOR_LEN(ctx->missing_packets) > maxsize) {
+		log_error("We have more missing packets (%d) registered than we can hold in our packet buffer. Dropping oldest.",
+			  VECTOR_LEN(ctx->missing_packets));
+		audio_packet *ap = &VECTOR_INDEX(ctx->missing_packets, 0);
+		free(ap->data);
+		VECTOR_DELETE(ctx->missing_packets, 0);
+	}
+}
 
 bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int packet_len) {
 	// TODO: Implementing TLV format for audio data will de-couple readms from the packet size.
@@ -511,21 +524,27 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 
 	log_verbose("read chunk from packet: %d samples: %d frame size:%d  channels: %d packet_len: %d, hdrsize: %d, play_at %s\n", chunk.size,
 		    chunk.samples, chunk.frame_size, chunk.channels, packet_len, sizeof(intercom_packet_audio), print_timespec(&play_at));
-	// print_packet((void*)pchunk, 17);
 
-	if (!is_next_chunk(this_seqno) && this_seqno - ctx->lastreceviedseqno < 1000) {
+	if (!is_next_chunk(this_seqno) &&
+	    (this_seqno > ctx->mtu / sizeof(tlv_request) && (this_seqno - ctx->lastreceviedseqno < ctx->mtu / sizeof(tlv_request)))) {
 		struct timespec ctime;
 		obtainsystime(&ctime);
-		log_error("Compensating packet loss for %lu packets: Last received audio chunk had seqno %lu, we just received %lu.\n",
+		log_error("Packet loss for %lu packets detected: Last received audio chunk had seqno %lu, we just received %lu.\n",
 			  this_seqno - ctx->lastreceviedseqno - 1, ctx->lastreceviedseqno, this_seqno);
 
 		// TODO: place multiple TLV for request into a single packet for more efficiency
-		for (uint32_t i = this_seqno - 1; i > ctx->lastreceviedseqno; --i) {
+		int count = 0;
+		for (uint32_t i = this_seqno - 1; (count < ctx->buffer_elements && i > ctx->lastreceviedseqno); --i) {
 			log_verbose("requested packet with seqno: %lu\n", i);
 			audio_packet ap = {.nonce = i};
 			VECTOR_ADD(snapctx.intercom_ctx.missing_packets, ap);
+			limit_missing_packets(ctx, ctx->buffer_elements);
 			intercom_send_request(ctx, &ap);
+			count++;
 		}
+	} else if (!is_next_chunk(this_seqno) && (this_seqno - ctx->lastreceviedseqno > ctx->buffer_elements)) {
+		log_error("WARN: huge loss of %d packets detected. Resetting seqno. This will be audible\n", this_seqno - ctx->lastreceviedseqno);
+		ctx->lastreceviedseqno = this_seqno;
 	}
 
 	struct timespec ctime;
@@ -641,23 +660,41 @@ int assemble32(uint8_t *dst, uint32_t *src) {
 }
 
 void remove_old_audiodata_task(void *data) {
-	//	struct buffer_cleanup_task *ct = (struct buffer_cleanup_task*) data;
-	/// audio_packet *ap = (audio_packet*)VECTOR_LSEARCH(&ct->ap, snapctx.intercom_ctx.packet_buffer ,cmp_audiopacket);
-	audio_packet ap = VECTOR_INDEX(snapctx.intercom_ctx.packet_buffer, 0);
-	free(ap.data);
+	stream *s = (stream *)data;
+	struct timespec ctime, play_at;
+	obtainsystime(&ctime);
+	struct timediff age;
 
-	VECTOR_DELETE(snapctx.intercom_ctx.packet_buffer, 0);  // always remove the oldest element
+	if (!VECTOR_LEN(s->clients))
+		return;
+
+	do {
+		audio_packet *ap = &VECTOR_INDEX(s->packet_buffer, 0);
+
+		pcmChunk chunk;
+		pcmChunk *pchunk = (pcmChunk *)&((uint8_t *)ap->data)[CHUNK_HEADER_SIZE + sizeof(intercom_packet_audio)];
+		chunk_copy_meta(&chunk, pchunk);
+		chunk_ntoh(&chunk);
+
+		play_at.tv_sec = chunk.play_at_tv_sec;
+		play_at.tv_nsec = chunk.play_at_tv_nsec;
+
+		age = timeSubMs(&ctime, snapctx.bufferms);
+
+		free(ap->data);
+		VECTOR_DELETE(s->packet_buffer, 0);  // always remove the oldest element
+	} while (timespec_cmp(age.time, play_at) > 0);
 }
 
 /** send chunk to all clients that are currently active
 */
-void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
-	int chunksize = CHUNK_HEADER_SIZE + chunk->size;
+void intercom_send_audio(intercom_ctx *ctx, stream *s) {
+	pcmChunk *chunk = &(s->inputpipe.chunk);
 	log_debug("sending %d Bytes of audio data\n", chunk->size);
-	uint8_t packet[sizeof(intercom_packet_audio) + chunksize];
+	uint8_t packet[CHUNK_HEADER_SIZE + chunk->size];
 
 	ssize_t packet_len;
-	packet_len = assemble_header(&((intercom_packet_audio *)packet)->hdr, AUDIO_DATA);
+	packet_len = assemble_header(&((intercom_packet_audio *)packet)->hdr, AUDIO_DATA, &s->nonce, 0);
 
 	((intercom_packet_audio *)packet)->bufferms = htons(snapctx.bufferms);
 	packet_len += sizeof(snapctx.bufferms);
@@ -673,28 +710,22 @@ void intercom_send_audio(intercom_ctx *ctx, pcmChunk *chunk) {
 	memcpy(&packet[packet_len], chunk->data, chunk->size);
 	packet_len += chunk->size;
 
-	// print_packet(packet, packet_len);
-
 	audio_packet ap;
 	ap.data = snap_alloc(packet_len);
 	memcpy(ap.data, packet, packet_len);
 	ap.len = packet_len;
 	ap.nonce = ntohl(((intercom_packet_audio *)packet)->hdr.nonce);
-	VECTOR_ADD(ctx->packet_buffer, ap);
+	VECTOR_ADD(s->packet_buffer, ap);
 
 	// since we always write into this vector in ascending order, we can always remove the very first item on timeout and thus do not have to pass
 	// the information which packet to remove
-	post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms / 1000) + 1, snapctx.bufferms % 1000, remove_old_audiodata_task, NULL, NULL);
+	post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms / 1000), snapctx.bufferms % 1000, remove_old_audiodata_task, NULL, s);
 
-	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; i--) {
-		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
+	for (int i = VECTOR_LEN(s->clients) - 1; i >= 0; i--) {
+		struct client *c = &VECTOR_INDEX(s->clients, i);
 		if (!c->muted)
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, &c->ip, packet, packet_len, c->port);
 	}
-}
-
-void schedule_request(struct intercom_task *data, const int s_timeout, const int ms_timeout, void (*processor)(void *data)) {
-	data->check_task = post_task(&snapctx.taskqueue_ctx, s_timeout, ms_timeout, processor, NULL, data);
 }
 
 void hello_task(void *d) {
@@ -702,47 +733,47 @@ void hello_task(void *d) {
 	struct intercom_task *data = d;
 	intercom_packet_hello *hello = (intercom_packet_hello *)data->packet;
 
-	hello->hdr.nonce = get_nonce();
+	hello->hdr.nonce = get_nonce(&nonce);
 
 	int packet_len = sizeof(hello->hdr);
 
 	packet_len += assemble_hello((void *)(&data->packet[packet_len]));
 
 	intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len, snapctx.intercom_ctx.port);
-	schedule_hellos(data, 1, 500, hello_task);
+	data->check_task = post_task(&snapctx.taskqueue_ctx, 1, 500, hello_task, NULL, data);
 }
 
-void schedule_hellos(struct intercom_task *data, const int s_timeout, const int ms_timeout, void (*processor)(void *data)) {
-	data->check_task = post_task(&snapctx.taskqueue_ctx, s_timeout, ms_timeout, processor, NULL, data);
-}
-
-bool intercom_set_volume(intercom_ctx *ctx, const struct in6_addr *recipient, int port, uint8_t volume) {
+bool intercom_set_volume(intercom_ctx *ctx, const client_t *client, uint8_t volume) {
 	int packet_len = 0;
 	uint8_t *packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_op));
 
-	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION);
-	packet_len += assemble_volume(&packet[packet_len], get_nonce(), volume);
+	stream *s = stream_find(client);
+	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION, &s->nonce, 0);
+	packet_len += assemble_volume(&packet[packet_len], get_nonce(&s->nonce), volume);
 
-	intercom_send_packet_unicast(&snapctx.intercom_ctx, recipient, packet, packet_len, port);
+	intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, packet, packet_len, client->port);
 }
 
-bool intercom_stop_client(intercom_ctx *ctx, const struct in6_addr *recipient, int port) {
+bool intercom_stop_client(intercom_ctx *ctx, const client_t *client) {
 	int packet_len = 0;
 	uint8_t *packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_op));
 
-	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION);
-	packet_len += assemble_stop(&packet[packet_len], get_nonce());
+	stream *s = stream_find(client);
+	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION, &s->nonce, 0);
+	packet_len += assemble_stop(&packet[packet_len], get_nonce(&s->nonce));
 
-	intercom_send_packet_unicast(&snapctx.intercom_ctx, recipient, packet, packet_len, port);
+	intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, packet, packet_len, client->port);
 }
 
-bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, int port) {
+bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, const int port) {
 	struct intercom_task *data = snap_alloc0(sizeof(struct intercom_task));
 
 	data->packet_len = sizeof(intercom_packet_op) + sizeof(tlv_hello);
 	data->packet = snap_alloc(data->packet_len);
 
-	assemble_header(&((intercom_packet_op *)data->packet)->hdr, CLIENT_OPERATION);
+	log_error("intercom hello nonce: %lu\n", nonce);
+	assemble_header(&((intercom_packet_op *)data->packet)->hdr, CLIENT_OPERATION, &nonce, ctx->nodeid);
+	log_error("intercom hello nonce: %lu\n", nonce);
 
 	if (recipient) {
 		data->recipient = snap_alloc_aligned(sizeof(struct in6_addr), 16);

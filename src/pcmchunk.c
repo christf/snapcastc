@@ -74,7 +74,7 @@ void chunk_hton(pcmChunk *chunk) {
 	chunk->size = htons(chunk->size);
 }
 
-void chunk_copy_meta(pcmChunk *dest, pcmChunk *src) {
+void chunk_copy_meta(pcmChunk *dest, const pcmChunk *src) {
 	dest->play_at_tv_sec = src->play_at_tv_sec;
 	dest->play_at_tv_nsec = src->play_at_tv_nsec;
 	dest->samples = src->samples;

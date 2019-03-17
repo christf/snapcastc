@@ -66,6 +66,13 @@ timediff timeSub(const struct timespec *t1, const struct timespec *t2) {
 	return ret;
 }
 
+struct timediff timeSubMs(const struct timespec *t1, const int ms) {
+	struct timespec t2;
+	t2.tv_sec = ms / 1000;
+	t2.tv_nsec = (ms % 1000) * 1000000l;
+	return timeSub(t1, &t2);
+}
+
 struct timespec timeAddMs(const struct timespec *t1, const int ms) {
 	struct timespec t2;
 	t2.tv_sec = ms / 1000;

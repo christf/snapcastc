@@ -30,6 +30,7 @@
 #include "intercom.h"
 #include "jsonrpc.h"
 #include "snapcast.h"
+#include "stream.h"
 #include "util.h"
 
 #include <stdio.h>
@@ -86,13 +87,11 @@ void json_add_time(json_object *out, struct timespec *t) {
 	json_object_object_add(out, "usec", json_object_new_int(t->tv_nsec / 1000));
 }
 
-void json_add_group(json_object *out) {
+void json_add_group(json_object *out, stream *s) {
 	json_object *clients = json_object_new_array();
 
-	// TODO: iterate over all clients in this group
-
-	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; --i) {
-		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
+	for (int i = VECTOR_LEN(s->clients) - 1; i >= 0; --i) {
+		struct client *c = &VECTOR_INDEX(s->clients, i);
 
 		json_object *client = json_object_new_object();
 		json_object *config = json_object_new_object();
@@ -139,10 +138,12 @@ void json_add_group(json_object *out) {
 void json_add_groups(json_object *out) {
 	json_object *groups = json_object_new_array();
 
-	// TODO: iterate over all groups
-	json_object *group = json_object_new_object();
-	json_add_group(group);
-	json_object_array_add(groups, group);
+	for (int i = 0; i < VECTOR_LEN(snapctx.streams); ++i) {
+		stream *s = &VECTOR_INDEX(snapctx.streams, i);
+		json_object *group = json_object_new_object();
+		json_add_group(group, s);
+		json_object_array_add(groups, group);
+	}
 
 	json_object_object_add(out, "groups", groups);
 }
@@ -218,20 +219,20 @@ void json_build_serverstatus(json_object *in) {
 void handle_server_getstatus(jsonrpc_request *request, int fd) {
 	json_object *response = json_object_new_object();
 	json_object *result = json_object_new_object();
+	json_build_serverstatus(result);
 	jsonrpc_buildresult(response, request->id, result);
 
-	json_build_serverstatus(result);
 	json_object_print_and_put(fd, response);
 }
 
 void handle_GetRPCVersion(jsonrpc_request *request, int fd) {
 	json_object *response = json_object_new_object();
 	json_object *result = json_object_new_object();
-	jsonrpc_buildresult(response, request->id, result);
 
 	json_object_object_add(result, "major", json_object_new_string(SOURCE_VERSION_MAJOR));
 	json_object_object_add(result, "minor", json_object_new_string(SOURCE_VERSION_MINOR));
 	json_object_object_add(result, "patch", json_object_new_string(SOURCE_VERSION_PATCH));
+	jsonrpc_buildresult(response, request->id, result);
 
 	json_object_print_and_put(fd, response);
 }
@@ -275,7 +276,7 @@ bool handle_client_setvolume(jsonrpc_request *request, int fd) {
 		parameter *p = &VECTOR_INDEX(request->parameters, i);
 		if (!strncmp(p->name, "id", 2)) {
 			clientid = p->value.number;
-			client = get_client(clientid);
+			client = find_client(clientid).client;
 			if (!client) {
 				log_error("received volume change request for unknown client %d\n", clientid);
 				break;
@@ -355,6 +356,7 @@ int handle_line(socketclient *sc) {
 		return false;
 
 	jsonrpc_request jreq = {};
+	VECTOR_INIT(jreq.parameters);
 	log_error("parsing line: %s\n", sc->line);
 	if (!(jsonrpc_parse_string(&jreq, sc->line))) {
 		log_error("parsing unsuccessful for %s\n", sc->line);

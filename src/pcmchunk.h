@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <sys/time.h>
 
-// CHUNK_HEADER_SIZE defines the offset at which data will be written in a AUDIO packet
-#define CHUNK_HEADER_SIZE 17
+// CHUNK_HEADER_SIZE defines the offset at which data will be written in a AUDIO packet and the size of the PCM header without the pointer to the data
+#define CHUNK_HEADER_SIZE ( 17 )
 
 enum { CODEC_PCM = 0, CODEC_OPUS = 1 };
 
@@ -20,7 +20,7 @@ typedef struct {
 	uint8_t *data;
 } pcmChunk;
 
-void chunk_copy_meta(pcmChunk *dest, pcmChunk *src);
+void chunk_copy_meta(pcmChunk *dest, const pcmChunk *src);
 void get_emptychunk(pcmChunk *ret, unsigned int length_ms);
 bool chunk_is_empty(pcmChunk *c);
 void chunk_hton(pcmChunk *chunk);
