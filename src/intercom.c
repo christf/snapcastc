@@ -75,6 +75,9 @@ void intercom_init(intercom_ctx *ctx) {
 	ctx->bufferrindex = 0;
 	ctx->buffer = 0;
 
+	VECTOR_INIT(ctx->recent_packets);
+	VECTOR_INIT(ctx->missing_packets);
+
 	ctx->fd = socket(PF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0);
 	if (ctx->fd < 0)
 		exit_error("creating socket for intercom on node-IP");
@@ -486,12 +489,23 @@ bool is_next_chunk(uint32_t seq) {
 
 void limit_missing_packets(intercom_ctx *ctx, int maxsize) {
 	while (VECTOR_LEN(ctx->missing_packets) > maxsize) {
-		log_error("We have more missing packets (%d) registered than we can hold in our packet buffer. Dropping oldest.",
-			  VECTOR_LEN(ctx->missing_packets));
+		log_error("We have more missing packets (%d) registered than we can hold in our packet buffer (%d). Dropping oldest.",
+			  VECTOR_LEN(ctx->missing_packets), maxsize);
 
 		audio_packet *ap = &VECTOR_INDEX(ctx->missing_packets, 0);
 		free(ap->data);
 		VECTOR_DELETE(ctx->missing_packets, 0);
+	}
+}
+
+void prune_missing_packets(intercom_ctx *ctx, uint32_t oldestnonce) {
+	for (int i = VECTOR_LEN(ctx->missing_packets) - 1; i >= 0; --i) {
+		audio_packet *ap = &VECTOR_INDEX(ctx->missing_packets, i);
+
+		if (ap->nonce < oldestnonce) {
+			VECTOR_DELETE(ctx->missing_packets, i);
+			log_error("deleting outdated packet from missing packets vector\n");
+		}
 	}
 }
 
@@ -563,7 +577,12 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 			intercom_put_chunk_locate(ctx, &chunk);
 		}
 	} else {
-		log_error("discarding chunk %d (play at: %s) - too late to play, it is now %s.\n", this_seqno, print_timespec(&play_at), print_timespec(&ctime));
+		log_error("discarding chunk %d (play at: %s) - too late to play, it is now %s.\n", this_seqno, print_timespec(&play_at),
+			  print_timespec(&ctime));
+		if (this_seqno > ctx->lastreceviedseqno) {
+			ctx->lastreceviedseqno = this_seqno;
+			prune_missing_packets(ctx, this_seqno);
+		}
 	}
 
 	if (chunk.frame_size != snapctx.alsaplayer_ctx.frame_size || (chunk.channels != snapctx.alsaplayer_ctx.channels) ||
