@@ -488,6 +488,7 @@ void limit_missing_packets(intercom_ctx *ctx, int maxsize) {
 	while (VECTOR_LEN(ctx->missing_packets) > maxsize) {
 		log_error("We have more missing packets (%d) registered than we can hold in our packet buffer. Dropping oldest.",
 			  VECTOR_LEN(ctx->missing_packets));
+
 		audio_packet *ap = &VECTOR_INDEX(ctx->missing_packets, 0);
 		free(ap->data);
 		VECTOR_DELETE(ctx->missing_packets, 0);
@@ -533,14 +534,12 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 			  this_seqno - ctx->lastreceviedseqno - 1, ctx->lastreceviedseqno, this_seqno);
 
 		// TODO: place multiple TLV for request into a single packet for more efficiency
-		int count = 0;
-		for (uint32_t i = this_seqno - 1; (count < ctx->buffer_elements && i > ctx->lastreceviedseqno); --i) {
+		for (uint32_t i = max(ctx->lastreceviedseqno, this_seqno - ctx->buffer_elements) + 1; i < this_seqno; ++i) {
 			log_verbose("requested packet with seqno: %lu\n", i);
 			audio_packet ap = {.nonce = i};
 			VECTOR_ADD(snapctx.intercom_ctx.missing_packets, ap);
 			limit_missing_packets(ctx, ctx->buffer_elements);
 			intercom_send_request(ctx, &ap);
-			count++;
 		}
 	} else if (!is_next_chunk(this_seqno) && (this_seqno - ctx->lastreceviedseqno > ctx->buffer_elements)) {
 		log_error("WARN: huge loss of %d packets detected. Resetting seqno. This will be audible\n", this_seqno - ctx->lastreceviedseqno);
