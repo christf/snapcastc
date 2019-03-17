@@ -537,9 +537,13 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 		for (uint32_t i = max(ctx->lastreceviedseqno, this_seqno - ctx->buffer_elements) + 1; i < this_seqno; ++i) {
 			log_verbose("requested packet with seqno: %lu\n", i);
 			audio_packet ap = {.nonce = i};
-			VECTOR_ADD(snapctx.intercom_ctx.missing_packets, ap);
-			limit_missing_packets(ctx, ctx->buffer_elements);
-			intercom_send_request(ctx, &ap);
+
+			audio_packet *already_requesting = VECTOR_LSEARCH(&ap, ctx->missing_packets, cmp_audiopacket);
+			if (!already_requesting) {
+				VECTOR_ADD(snapctx.intercom_ctx.missing_packets, ap);
+				limit_missing_packets(ctx, ctx->buffer_elements);
+				intercom_send_request(ctx, &ap);
+			}
 		}
 	} else if (!is_next_chunk(this_seqno) && (this_seqno - ctx->lastreceviedseqno > ctx->buffer_elements)) {
 		log_error("WARN: huge loss of %d packets detected. Resetting seqno. This will be audible\n", this_seqno - ctx->lastreceviedseqno);
@@ -559,7 +563,7 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 			intercom_put_chunk_locate(ctx, &chunk);
 		}
 	} else {
-		log_error("discarding chunk - too late to play\n");
+		log_error("discarding chunk %d (play at: %s) - too late to play, it is now %s.\n", this_seqno, print_timespec(&play_at), print_timespec(&ctime));
 	}
 
 	if (chunk.frame_size != snapctx.alsaplayer_ctx.frame_size || (chunk.channels != snapctx.alsaplayer_ctx.channels) ||
