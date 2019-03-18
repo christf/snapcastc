@@ -63,8 +63,7 @@ void realloc_intercom_buffer_when_required(intercom_ctx *ctx, int serverbufferms
 		free(ctx->buffer);
 		ctx->bufferrindex = ctx->bufferwindex = 0;
 		ctx->buffer_elements = calculated_elements;
-		ctx->buffer = snap_alloc(sizeof(pcmChunk) * ctx->buffer_elements);
-		memset(ctx->buffer, 0, sizeof(pcmChunk) * ctx->buffer_elements);
+		ctx->buffer = snap_alloc0(sizeof(pcmChunk) * ctx->buffer_elements);
 		snapctx.bufferms = serverbufferms;
 	}
 }
@@ -73,7 +72,8 @@ void intercom_init(intercom_ctx *ctx) {
 	obtainrandom(&nonce, sizeof(uint32_t), 0);
 	ctx->bufferwindex = 0;
 	ctx->bufferrindex = 0;
-	ctx->buffer = 0;
+	ctx->buffer_elements = 0;
+	ctx->buffer = NULL;
 
 	VECTOR_INIT(ctx->recent_packets);
 	VECTOR_INIT(ctx->missing_packets);
@@ -212,7 +212,7 @@ int ringbuffer_fill(intercom_ctx *ctx) {
 	else
 		fill = ctx->bufferwindex - ctx->bufferrindex;
 
-	log_debug("buffer fill: %d wraparound %d elements: %d readindex: %d writeindex %d\n", fill, ctx->buffer_wraparound, ctx->buffer_elements,
+	log_error("buffer fill: %d wraparound %d elements: %d readindex: %d writeindex %d\n", fill, ctx->buffer_wraparound, ctx->buffer_elements,
 		  ctx->bufferrindex, ctx->bufferwindex);
 	return fill;
 }
@@ -331,40 +331,42 @@ bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret) {
 }
 
 void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
-	pcmChunk *c;
+	pcmChunk *c = NULL;
 	if (!intercom_peeknextaudiochunk(ctx, &c)) {
 		log_error("BUFFER UNDERRUN\n");
-		get_emptychunk(ret, 5);
-	} else {
-		memcpy(ret, c, sizeof(pcmChunk));
+		if (ret)
+			get_emptychunk(ret, 5);
 	}
 
-	log_verbose(
-	    "retrieved audio chunk [size: %d, samples: %d, channels: %d, timestamp %zu.%zu] from readindex/writeindex: %zu/%zu, cached "
-	    "chunks: %zu/%zu\n",
-	    ret->size, ret->samples, ret->channels, ret->play_at_tv_sec, ret->play_at_tv_nsec, ctx->bufferrindex, ctx->bufferwindex,
-	    ringbuffer_fill(ctx), ctx->buffer_elements);
-	print_packet(ret->data, ret->size);
+	if (c) {
+		if (ret && c)
+			memcpy(ret, c, sizeof(pcmChunk));
+		log_verbose(
+				"retrieved audio chunk [size: %d, samples: %d, channels: %d, timestamp %zu.%zu] from readindex/writeindex: %zu/%zu, cached "
+				"chunks: %zu/%zu\n",
+				c->size, c->samples, c->channels, c->play_at_tv_sec, c->play_at_tv_nsec, ctx->bufferrindex, ctx->bufferwindex,
+				ringbuffer_fill(ctx), ctx->buffer_elements);
+		print_packet(c->data, c->size);
+	}
 
-	if (ret->play_at_tv_sec > 0) {
+	if (chunk_is_empty(c)) {
 		ctx->bufferrindex = ringbuffer_getnextindex(ctx, ctx->bufferrindex);
 		if (ctx->bufferrindex == 0)
 			ctx->buffer_wraparound = 0;
 	}
 }
 
-/*
 int ringbuffer_getprevindex(intercom_ctx *ctx, int i) {
 	if (i == 0)
 		return ctx->buffer_elements;
 
 	return (i - 1);
 }
-*/
 
 void bufferwindex_increment(intercom_ctx *ctx) {
 	ctx->bufferwindex = ringbuffer_getnextindex(ctx, ctx->bufferwindex);
-	if (ctx->bufferwindex == 0 && ctx->bufferrindex != 0)
+
+	if (ctx->bufferwindex == 0 )
 		ctx->buffer_wraparound = 1;
 }
 
@@ -398,8 +400,9 @@ void intercom_put_chunk(intercom_ctx *ctx, pcmChunk *chunk) {
 	log_debug("wrote chunk to buffer readindex: %d elements: %d to writeindex: %d\n", ctx->bufferrindex, ctx->buffer_elements, ctx->bufferwindex);
 	//	print_packet(chunk->data, chunk->size);
 
-	// TODO protect from over-writing unread data would be nice in the client in addition to the server - We are leaking memory if overwriting
-	// happens.
+	if (ctx->buffer_elements && ctx->bufferwindex == ctx->bufferrindex) {
+		intercom_getnextaudiochunk(ctx, NULL);
+	}
 	memcpy(&ctx->buffer[ctx->bufferwindex], chunk, sizeof(pcmChunk));
 	bufferwindex_increment(ctx);
 }
@@ -527,7 +530,7 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 
 	// when buffer is empty, it may not have been initialized and thus the server may have adjusted its chunk size.
 	log_debug("handling audio data\n");
-	if (!ringbuffer_fill(ctx)) {
+	if ( (!ringbuffer_fill(ctx) ) && (! ctx->buffer_elements) ) {
 		log_error("buffer empty\n");
 		chunk_decode(&chunk);
 		realloc_intercom_buffer_when_required(ctx, ntohs(packet->bufferms), chunk_getduration_ms(&chunk));

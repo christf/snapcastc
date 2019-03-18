@@ -12,6 +12,8 @@
 #define EMPTY_CHUNK_SIZE_MS 5
 
 void get_emptychunk(pcmChunk *ret, unsigned int length_ms) {
+	if (!ret)
+		return;
 	ret->size = ret->samples * length_ms * ret->channels * ret->frame_size / 1000;
 	ret->play_at_tv_sec = 0L;
 	ret->play_at_tv_nsec = 0L;
@@ -25,7 +27,7 @@ int chunk_getduration_ms(pcmChunk *chunk) {
 									: 0;
 }
 
-bool chunk_is_empty(pcmChunk *c) { return !(c->play_at_tv_sec > 0); }
+bool chunk_is_empty(pcmChunk *c) { return !(c && c->play_at_tv_sec); }
 
 
 // this should only be available in client
@@ -45,9 +47,11 @@ void chunk_ntoh(pcmChunk *chunk) {
 }
 
 void chunk_free_members(pcmChunk *chunk) {
-	free(chunk->data);
-	chunk->data = NULL;
-	chunk->size = 0;
+	if (chunk) {
+		free(chunk->data);
+		chunk->data = NULL;
+		chunk->size = 0;
+	}
 }
 
 void pcmchunk_shaveoff(pcmChunk *chunk, int frames) {
