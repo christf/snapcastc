@@ -32,18 +32,22 @@
 #include "timespec.h"
 #include "util.h"
 
-#include <sys/epoll.h>
 #include <fcntl.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#define COLD_START_OFFSET_MS 100
 
 bool is_chunk_complete(inputpipe_ctx *ctx) { return (ctx->chunksize == ctx->data_read); }
 
 void set_idle(void *d) {
 	inputpipe_ctx *ctx = (inputpipe_ctx *)d;
+	if (ctx->idle_task)
+		taskqueue_remove(ctx->idle_task);
 	log_verbose("INPUT_UNDERRUN... this will be audible.\n");
 	ctx->state = IDLE;
 	ctx->idle_task = NULL;
@@ -54,7 +58,6 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	struct timespec ctime;
 	obtainsystime(&ctime);
 
-	struct timespec start_playing_at = timeAddMs(&ctime, 100);
 	struct timespec bufferfull = timeAddMs(&ctime, snapctx.bufferms * 95 / 100);
 	bool buffer_full = (timespec_cmp(ctx->lastchunk, bufferfull) > 0);
 
@@ -69,49 +72,49 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		log_debug("read %d Bytes from inputpipe, data_read: %d chunksize: %d\n", count, ctx->data_read, ctx->chunksize);
 		ctx->state = IDLE;
 	} else if ((count > 0) && (ctx->state == IDLE)) {
+		struct timespec start_playing_at = timeAddMs(&ctime, COLD_START_OFFSET_MS);
 		ctx->data_read += count;
 		ctx->state = PLAYING;
 		ctx->chunk.play_at_tv_sec = start_playing_at.tv_sec;
 		ctx->chunk.play_at_tv_nsec = start_playing_at.tv_nsec;
-		ctx->lastchunk.tv_sec = ctx->chunk.play_at_tv_sec;
-		ctx->lastchunk.tv_nsec = ctx->chunk.play_at_tv_nsec;
+		ctx->lastchunk = chunk_get_play_at(&ctx->chunk);
+
 		log_verbose("Detected status change, resyncing timestamps. This will be audible.\n", ctx->state);
 
 		log_debug("read chunk that is to be played at %s, current time %s\n",
 			  print_timespec(&(struct timespec){.tv_sec = ctx->chunk.play_at_tv_sec, .tv_nsec = ctx->chunk.play_at_tv_nsec}),
 			  print_timespec(&ctime));
 		ctx->idle_task = post_task(&snapctx.taskqueue_ctx, snapctx.bufferms, snapctx.bufferms % 1000, set_idle, NULL, ctx);
-	} else if ((count > 0) && (ctx->state == PLAYING)) {
+	} else if ((count > 0) && ((ctx->state == PLAYING) || (ctx->state == THROTTLE))) {
 		log_debug("read %d Bytes from inputpipe\n", count);
 		ctx->data_read += count;
 		reschedule_task(&snapctx.taskqueue_ctx, ctx->idle_task, snapctx.bufferms / 1000, snapctx.bufferms % 1000);
 	}
 
 	if (is_chunk_complete(ctx)) {
-		struct timespec play_at;
-		play_at.tv_sec = ctx->chunk.play_at_tv_sec;
-		play_at.tv_nsec = ctx->chunk.play_at_tv_nsec;
+		struct timespec play_at = chunk_get_play_at(&ctx->chunk);
 
 		if (timespec_cmp(ctime, play_at) > 0) {
-			log_error("We are horribly late when reading from the pipes - re-adjusting the play_at timestamp to current time.\n");
-			play_at = ctime;
+			log_error(
+			    "We are horribly late when reading from the pipes - Using current timestamp to play back current chunk. Consider "
+			    "adjusting timeout_ms for this stream.\n");
+			play_at = timeAddMs(&ctime, COLD_START_OFFSET_MS);
+		} else {
+			play_at = timeAddMs(&play_at, ctx->read_ms);
 		}
 
-		play_at = timeAddMs(&play_at, ctx->read_ms);
 		timediff t = timeSub(&ctime, &play_at);
 		ctx->chunk.play_at_tv_sec = play_at.tv_sec;
 		ctx->chunk.play_at_tv_nsec = play_at.tv_nsec;
 		ctx->lastchunk = play_at;
 
 		log_verbose("read %lu Bytes of data from %s, last read was %lu, reader state: %s, to be played at %s, current time %s, diff: %c%s\n",
-			    ctx->data_read, ctx->fname, count, print_inputpipe_status(ctx->state), print_timespec(&play_at), print_timespec(&ctime), t.sign < 0 ? '-' : ' ', 
-			    print_timespec(&t.time));
+			    ctx->data_read, ctx->fname, count, print_inputpipe_status(ctx->state), print_timespec(&play_at), print_timespec(&ctime),
+			    t.sign < 0 ? '-' : ' ', print_timespec(&t.time));
 		ctx->chunk.size = ctx->data_read;
 		ctx->chunk.frame_size = ctx->samplesize;
 		ctx->chunk.samples = ctx->samples;
 		ctx->chunk.channels = ctx->channels;
-		ctx->lastchunk.tv_sec = ctx->chunk.play_at_tv_sec;
-		ctx->lastchunk.tv_nsec = ctx->chunk.play_at_tv_nsec;
 		ctx->chunk.codec = CODEC_PCM;
 		ctx->data_read = 0;
 		return 1;
@@ -119,34 +122,42 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	return 0;
 }
 
-
 void inputpipe_resume_read(void *d) {
 	log_debug("resuming reading from pipe\n");
-	stream *st = (stream *)d;
-	inputpipe_init(&st->inputpipe);
-	add_fd(snapctx.efd, st->inputpipe.fd, EPOLLIN);
+	stream *s = (stream *)d;
+	if (VECTOR_LEN(s->clients)) {
+		if (!s->inputpipe.initialized)
+			inputpipe_init(&s->inputpipe);
+		add_fd(snapctx.efd, s->inputpipe.fd, EPOLLIN);
+		s->inputpipe.state == PLAYING;
+	}
+}
+
+void inputpipe_hold(inputpipe_ctx *ctx) {
+	set_idle(ctx);
+	if (ctx->resume_task)
+		taskqueue_remove(ctx->resume_task);
+	if (ctx->state == PLAYING)
+		del_fd(snapctx.efd, ctx->fd);
+	ctx->state = IDLE;
 }
 
 void inputpipe_uninit(inputpipe_ctx *ctx) {
-	if (ctx->idle_task)
-		taskqueue_remove(ctx->idle_task);
-	set_idle(ctx);
-
+	inputpipe_hold(ctx);
 	chunk_free_members(&ctx->chunk);
 	close(ctx->fd);
+	ctx->initialized = false;
 }
 
 void inputpipe_init(inputpipe_ctx *ctx) {
 	uint32_t c = ctx->samples * ctx->channels * ctx->samplesize * ctx->read_ms / 1000;
 	ctx->chunksize = c;
-	ctx->chunk.data = snap_alloc(ctx->chunksize);
 	ctx->chunk.size = ctx->chunksize;
 	ctx->chunk.samples = ctx->samples;
 	ctx->chunk.frame_size = ctx->samplesize;
 	ctx->chunk.channels = ctx->channels;
 	ctx->data_read = 0;
-	if (!ctx->initialized) {
-		ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
-		ctx->initialized = true;
-	}
+	ctx->chunk.data = snap_alloc(ctx->chunksize);
+	ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
+	ctx->initialized = true;
 }

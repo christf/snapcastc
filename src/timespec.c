@@ -27,7 +27,9 @@ int timespec_isnear(const struct timespec *t1, const struct timespec *t2, const 
 		return 1;
 	}
 
-	if (timespec_cmp(*t2, *t1) <= 0) {
+	tmp = timeSubMs(t1, chunkms);
+
+	if (timespec_cmp(*t2, tmp) >= 0 && timespec_cmp(*t2, *t1) <= 0) {
 		log_debug("isnear: YES-  t1: %s, t2: %s\n", print_timespec(t1), print_timespec(t2));
 		return 1;
 	}
@@ -66,11 +68,11 @@ timediff timeSub(const struct timespec *t1, const struct timespec *t2) {
 	return ret;
 }
 
-struct timediff timeSubMs(const struct timespec *t1, const int ms) {
+struct timespec timeSubMs(const struct timespec *t1, const int ms) {
 	struct timespec t2;
 	t2.tv_sec = ms / 1000;
 	t2.tv_nsec = (ms % 1000) * 1000000l;
-	return timeSub(t1, &t2);
+	return timeSub(t1, &t2).time;
 }
 
 struct timespec timeAddMs(const struct timespec *t1, const int ms) {
@@ -80,7 +82,7 @@ struct timespec timeAddMs(const struct timespec *t1, const int ms) {
 	return timeAdd(t1, &t2);
 }
 
-int timespec_cmp(struct timespec a, struct timespec b) {
+int timespec_cmp(const struct timespec a, const struct timespec b) {
 	if (a.tv_sec < b.tv_sec)
 		return -1;
 	else if (a.tv_sec > b.tv_sec)

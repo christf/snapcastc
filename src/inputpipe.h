@@ -30,7 +30,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-enum inputpipe_state { IDLE = 0, PLAYING };
+enum inputpipe_state { IDLE = 0, PLAYING, THROTTLE };
 
 typedef struct {
 	char *fname;
@@ -49,6 +49,7 @@ typedef struct {
 	uint32_t pipelength_ms;
 	struct timespec lastchunk;
 	bool initialized;
+	taskqueue_t *resume_task;
 	taskqueue_t *idle_task;
 } inputpipe_ctx;
 
@@ -59,4 +60,5 @@ typedef struct {
 int inputpipe_handle(inputpipe_ctx *ctx);
 void inputpipe_resume_read(void *d);
 void inputpipe_uninit(inputpipe_ctx *ctx);
+void inputpipe_hold(inputpipe_ctx *ctx);
 void inputpipe_init(inputpipe_ctx *ctx);

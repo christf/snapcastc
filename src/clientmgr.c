@@ -1,6 +1,6 @@
 #include "clientmgr.h"
-#include "inputpipe.h"
 #include "alloc.h"
+#include "inputpipe.h"
 #include "inputpipe.h"
 #include "intercom.h"
 #include "packet_types.h"
@@ -78,8 +78,7 @@ client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip
 	data->id = id;
 
 	ret->purge_task = post_task(&snapctx.taskqueue_ctx, 5, 0, schedule_delete_client, free, data);
-	
-	VECTOR_ADD(VECTOR_INDEX(snapctx.streams, 0).clients, *ret);
+
 
 	return ret;
 }
@@ -96,13 +95,9 @@ void print_client(struct client *client) {
 
 void delete_client_internal(stream *s, client_t *c) {
 	if (c && s) {
-		// TODO: when removing the last client, stop reading from this stream. On the first client on a stream, start processing the input
 		log_verbose("\033[34mREMOVING client %lu, %d clients left in stream.\033[0m\n", c->id, VECTOR_LEN(s->clients) - 1);
 		print_client(c);
-
-		int i = VECTOR_GETINDEX(s->clients, c);
-		VECTOR_DELETE(s->clients, i);
-
+		stream_client_remove(s, c);
 	} else {
 		log_debug("Client [%lu] unknown: cannot delete\n", c->id);
 	}
@@ -170,12 +165,15 @@ bool clientmgr_refresh_client(struct client *client) {
 		client_t n_client = {};
 		new_client(&n_client, client->id, &client->ip, client->port);
 
+
 		stream *s = &VECTOR_INDEX(snapctx.streams, 0);
-		if ( (VECTOR_LEN(s->clients) == 1) && (s->inputpipe.state == IDLE) )
-			post_task(&snapctx.taskqueue_ctx, s->inputpipe.read_ms / 1000, s->inputpipe.read_ms % 1000, inputpipe_resume_read, NULL, s);
 
-		existingclient = get_client(&VECTOR_INDEX(snapctx.streams, 0), client->id);
+		if (!(s->initialized))
+			stream_init(s);
 
+		stream_client_add(s, &n_client);
+
+		existingclient = get_client(s, client->id);
 		existingclient->volume_percent = client->volume_percent;
 
 		clientmgr_send_audio_buffer_to_client(existingclient);
@@ -193,7 +191,7 @@ bool clientmgr_refresh_client(struct client *client) {
 	existingclient->latency = client->latency;
 
 	if (!is_roughly(client->volume_percent, existingclient->volume_percent)) {
-		log_verbose("volume of client %d is not volume of existingclient %d\n", client->volume_percent, existingclient->volume_percent);
+		log_verbose("adjusting volume of client %d to recorded value of %d%%\n", client->volume_percent, existingclient->volume_percent);
 		clientmgr_client_refreshvolume(existingclient, existingclient->volume_percent);
 	}
 

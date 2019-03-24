@@ -12,14 +12,14 @@
 
 void decode_opus_handle(opuscodec_ctx *ctx, pcmChunk *chunk) {
 	if (!ctx->decoder) {
-		log_error("initializing opus codec\n");
+		log_verbose("initializing opus codec\n");
 		opus_init_decoder(ctx, chunk->samples, chunk->channels);
 	}
 
-	struct timespec ctime;
-	if (snapctx.debug) {
-		obtainsystime(&ctime);
-		log_debug("starting decoder at %s\n", print_timespec(&ctime));
+	log_debug("Decoding opus data for chunk\n");
+
+	if (!chunk || !chunk->channels || !chunk->frame_size || !chunk->size || !chunk->data) {
+		exit_error("chunk empty, cannot decode. This is a bug\n");
 	}
 
 	int MAX_FRAMES = chunk->samples * OPUS_MAX_CHUNK_LENGTH_MS / 1000;
@@ -47,11 +47,6 @@ void decode_opus_handle(opuscodec_ctx *ctx, pcmChunk *chunk) {
 		}
 
 		chunk->data = out;
-	}
-
-	if (snapctx.debug) {
-		obtainsystime(&ctime);
-		log_debug("finished decoder at %s\n", print_timespec(&ctime));
 	}
 }
 

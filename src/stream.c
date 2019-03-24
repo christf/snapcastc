@@ -43,6 +43,15 @@ stream *stream_find(const client_t *client) {
 	return NULL;
 }
 
+stream *stream_find_name(const char *name) {
+	for (int i = VECTOR_LEN(snapctx.streams) - 1; i >= 0; --i) {
+		stream *s = &VECTOR_INDEX(snapctx.streams, i);
+		if (!strncmp(s->name, name, strlen(s->name)))
+			return s;
+	}
+	return NULL;
+}
+
 stream *stream_find_fd(int fd) {
 	for (int i = VECTOR_LEN(snapctx.streams) - 1; i >= 0; --i) {
 		stream *s = &VECTOR_INDEX(snapctx.streams, i);
@@ -113,9 +122,28 @@ bool stream_parse(stream *s, const char *raw) {
 	return true;
 }
 
+void stream_client_add(stream *s, client_t *c) {
+	VECTOR_ADD(s->clients, *c);
+	log_verbose("added client %d(%s) to stream %s\n", c->id, c->name, s->name);
+	if ((VECTOR_LEN(s->clients) == 1) && (s->inputpipe.state == IDLE)) {
+		// TODO: it would be excellent to re-set the timestamps in the buffer allowing playback where we left off if no other client was
+		// active
+		inputpipe_resume_read(s);
+	}
+}
+
+void stream_client_remove(stream *s, client_t *c) {
+	int i = VECTOR_GETINDEX(s->clients, c);
+	VECTOR_DELETE(s->clients, i);
+
+	if (!VECTOR_LEN(s->clients))
+		inputpipe_hold(&s->inputpipe);
+}
+
 void stream_init(stream *s) {
 	VECTOR_INIT(s->clients);
 	VECTOR_INIT(s->packet_buffer);
 	s->nonce = 0;
+	s->initialized = true;
 }
 

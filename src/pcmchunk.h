@@ -29,6 +29,8 @@ void chunk_ntoh(pcmChunk *chunk);
 int chunk_getduration_ms(pcmChunk *chunk);
 
 bool chunk_decode(pcmChunk *chunk);
+struct timespec chunk_get_play_at(pcmChunk *chunk);
+int chunk_cmp(pcmChunk *c2, pcmChunk *c1);
 
 void pcmchunk_shaveoff(pcmChunk *chunk, int frames);
 void chunk_free_members(pcmChunk *chunk);

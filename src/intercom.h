@@ -6,6 +6,7 @@
 #include "vector.h"
 #include "stream.h"
 #include "packet_types.h"
+#include "pqueue.h"
 
 #include <arpa/inet.h>
 #include <stdbool.h>
@@ -96,12 +97,8 @@ typedef struct {
 	int mtu;
 	int buffer_wraparound;
 
-	size_t bufferwindex;
-	size_t buffer_elements;
-	size_t bufferrindex;
 	size_t lastreceviedseqno;
-	pcmChunk *buffer;
-
+	PQueue *receivebuffer;
 } intercom_ctx;
 
 void intercom_send_audio(intercom_ctx *ctx, stream *s);

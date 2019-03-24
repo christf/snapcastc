@@ -50,18 +50,14 @@
 #include <time.h>
 #include <unistd.h>
 
-
 snapctx_t snapctx = {};
-
 
 void sig_term_handler(int signum, siginfo_t *info, void *ptr) {
 	write(STDERR_FILENO, SIGTERM_MSG, sizeof(SIGTERM_MSG));
 	_exit(EXIT_SUCCESS);
 }
 
-bool is_inputpipe(int fd) {
-	return !!stream_find_fd(fd);
-}
+bool is_inputpipe(int fd) { return !!stream_find_fd(fd); }
 
 void loop() {
 	int maxevents = 64;
@@ -94,13 +90,14 @@ void loop() {
 					log_error("input pipe was closed (mpd stopped?). Re-initializing-.\n");
 					perror("received signal was");
 					stream *s = stream_find_fd(events[i].data.fd);
-					del_fd(snapctx.efd, events[i].data.fd);
-					inputpipe_uninit(&s->inputpipe);
-
-					clientmgr_stop_clients(s);
-
-					inputpipe_init(&s->inputpipe);
-					add_fd(snapctx.efd, s->inputpipe.fd, EPOLLIN);
+					if (s) {
+						if (s->inputpipe.state == PLAYING)
+							del_fd(snapctx.efd, events[i].data.fd);
+						inputpipe_uninit(&s->inputpipe);
+						clientmgr_stop_clients(s);
+						inputpipe_init(&s->inputpipe);
+						add_fd(snapctx.efd, s->inputpipe.fd, EPOLLIN);
+					}
 				} else if (socket_get_client(&snapctx.socket_ctx, NULL, events[i].data.fd)) {
 					log_error("error received on one of the socket clients. Closing %d\n", events[i].data.fd);
 					socketclient *sc = NULL;
@@ -116,8 +113,10 @@ void loop() {
 				int ret = inputpipe_handle(&s->inputpipe);
 				if (ret == -1) {
 					del_fd(snapctx.efd, events[i].data.fd);
+					s->inputpipe.state = THROTTLE;
 					log_debug("throttling input from fifo, resuming read in %d ms\n", s->inputpipe.read_ms);
-					post_task(&snapctx.taskqueue_ctx, s->inputpipe.read_ms / 1000, s->inputpipe.read_ms % 1000, inputpipe_resume_read, NULL, s);
+					s->inputpipe.resume_task = post_task(&snapctx.taskqueue_ctx, s->inputpipe.read_ms / 1000, s->inputpipe.read_ms % 1000,
+						  inputpipe_resume_read, NULL, s);
 				} else if (ret == 1) {
 					encode_opus_handle(&s->opuscodec_ctx, &s->inputpipe.chunk);
 					intercom_send_audio(&snapctx.intercom_ctx, s);

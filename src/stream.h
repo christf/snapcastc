@@ -32,11 +32,16 @@ typedef struct {
 
 	char *name;
 	char *raw;
+	bool initialized;
 } stream;
 
 stream *stream_find(const client_t *client);
 stream *stream_find_fd(int fd);
+stream *stream_find_name(const char *name);
+void stream_client_add(stream *s, client_t *c);
+void stream_client_remove(stream *s, client_t *c);
 
 int stream_free_members(stream *s);
 bool stream_parse(stream *s, const char *raw);
+void stream_init(stream *s);
 

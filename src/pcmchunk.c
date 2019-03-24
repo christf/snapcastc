@@ -8,7 +8,6 @@
 #include <time.h>
 #include "timespec.h"
 
-
 #define EMPTY_CHUNK_SIZE_MS 5
 
 void get_emptychunk(pcmChunk *ret, unsigned int length_ms) {
@@ -22,6 +21,15 @@ void get_emptychunk(pcmChunk *ret, unsigned int length_ms) {
 	log_verbose("generated chunks with size %d and length %lu ms\n", ret->size, length_ms);
 }
 
+struct timespec chunk_get_play_at(pcmChunk *chunk) {
+	struct timespec ret = {};
+	if (chunk) {
+		ret.tv_sec = chunk->play_at_tv_sec;
+		ret.tv_nsec = chunk->play_at_tv_nsec;
+	}
+	return ret;
+}
+
 int chunk_getduration_ms(pcmChunk *chunk) {
 	return (chunk->channels && chunk->frame_size && chunk->samples) ? 1000 * chunk->size / chunk->channels / chunk->frame_size / chunk->samples
 									: 0;
@@ -29,12 +37,10 @@ int chunk_getduration_ms(pcmChunk *chunk) {
 
 bool chunk_is_empty(pcmChunk *c) { return !(c && c->play_at_tv_sec); }
 
-
 // this should only be available in client
 bool chunk_decode(pcmChunk *c) {
 	extern opuscodec_ctx opuscodec;
-	if (c->codec == CODEC_OPUS) {
-		log_verbose("Decoding opus data for chunk\n");
+	if (c && c->codec == CODEC_OPUS) {
 		decode_opus_handle(&opuscodec, c);
 	}
 }
@@ -49,6 +55,7 @@ void chunk_ntoh(pcmChunk *chunk) {
 void chunk_free_members(pcmChunk *chunk) {
 	if (chunk) {
 		free(chunk->data);
+		chunk->play_at_tv_sec = 0;
 		chunk->data = NULL;
 		chunk->size = 0;
 	}
@@ -76,6 +83,19 @@ void chunk_hton(pcmChunk *chunk) {
 	chunk->play_at_tv_nsec = htonl(chunk->play_at_tv_nsec);
 	chunk->samples = htonl(chunk->samples);
 	chunk->size = htons(chunk->size);
+}
+
+int chunk_cmp(pcmChunk *c1, pcmChunk *c2) {
+	if (c1->play_at_tv_sec > c2->play_at_tv_sec)
+		return 1;
+	else if (c1->play_at_tv_sec < c2->play_at_tv_sec)
+		return -1;
+	else if (c1->play_at_tv_nsec > c2->play_at_tv_nsec)
+		return 1;
+	else if (c1->play_at_tv_nsec < c2->play_at_tv_nsec)
+		return -1;
+
+	return 0;
 }
 
 void chunk_copy_meta(pcmChunk *dest, const pcmChunk *src) {

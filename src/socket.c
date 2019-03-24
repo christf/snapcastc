@@ -25,6 +25,7 @@
    */
 
 #include "socket.h"
+#include "alloc.h"
 #include "clientmgr.h"
 #include "error.h"
 #include "intercom.h"
@@ -75,12 +76,9 @@ const char *group_get_id() {
 	return "2427bc26-e219-8d33-901c-20493f46eb42";
 }
 
-const char *group_get_name() { return ""; }
+const char *group_get_name(stream *s) { return s->name; }
 
-const char *group_get_stream_id() {
-	// TODO implement me
-	return "default";
-}
+const char *group_get_stream_id(stream *s) { return group_get_name(s); }
 
 void json_add_time(json_object *out, struct timespec *t) {
 	json_object_object_add(out, "sec", json_object_new_int(t->tv_sec));
@@ -129,10 +127,10 @@ void json_add_group(json_object *out, stream *s) {
 	}
 
 	json_object_object_add(out, "clients", clients);
-	json_object_object_add(out, "id", json_object_new_string(group_get_id()));
-	json_object_object_add(out, "muted", json_object_new_boolean(group_get_muted()));
-	json_object_object_add(out, "name", json_object_new_string(group_get_name()));
-	json_object_object_add(out, "stream_id", json_object_new_string(group_get_stream_id()));
+	json_object_object_add(out, "id", json_object_new_string(group_get_id(s)));
+	json_object_object_add(out, "muted", json_object_new_boolean(group_get_muted(s)));
+	json_object_object_add(out, "name", json_object_new_string(group_get_name(s)));
+	json_object_object_add(out, "stream_id", json_object_new_string(group_get_stream_id(s)));
 }
 
 void json_add_groups(json_object *out) {
@@ -259,6 +257,52 @@ void socket_init(socket_ctx *ctx) {
 		exit_errno("Could not listen on status socket");
 }
 
+bool handle_client_setstream(jsonrpc_request *request, int fd) {
+	json_object *response = json_object_new_object();
+	json_object *result = json_object_new_object();
+	int clientid = 0;
+	char *target_stream_id = NULL;
+	client_t *client = NULL;
+	stream *newstream = NULL;
+
+	for (int i = VECTOR_LEN(request->parameters) - 1; i >= 0; --i) {
+		parameter *p = &VECTOR_INDEX(request->parameters, i);
+		if (!strncmp(p->name, "id", 2)) {
+			clientid = p->value.number;
+			client = find_client(clientid).client;
+			if (!client) {
+				log_error("received stream change request for unknown client %d\n", clientid);
+				break;
+			}
+		} else if (!strncmp(p->name, "stream_id", 9)) {
+			newstream = stream_find_name(p->value.string);
+			if (newstream) {
+				free(target_stream_id);
+				target_stream_id = snap_alloc(strlen(p->value.string));
+				strncpy(target_stream_id, p->value.string, strlen(p->value.string));
+			} else {
+				free(target_stream_id);
+				log_error("received stream change request for unknown stream %s\n", p->value.string);
+				break;
+			}
+		}
+	}
+
+	if (client) {
+		stream *current_stream = stream_find(client);
+		bool client_stream_is_changed = !!strncmp(current_stream->name, target_stream_id, strlen(current_stream->name));
+		if (client_stream_is_changed) {
+			intercom_stop_client(&snapctx.intercom_ctx, client);
+			stream_client_remove(current_stream, client);
+			stream_client_add(newstream, client);
+		}
+		json_object_object_add(response, "result", json_object_new_string(target_stream_id));
+	}
+	jsonrpc_buildresult(response, request->id, result);
+	json_object_print_and_put(fd, response);
+	free(target_stream_id);
+}
+
 bool handle_client_setvolume(jsonrpc_request *request, int fd) {
 	json_object *response = json_object_new_object();
 	json_object *result = json_object_new_object();
@@ -336,6 +380,9 @@ reply:;
 int handle_request(jsonrpc_request *request, int fd) {
 	if (!strncmp(request->method, "Server.GetRPCVersion", 20)) {
 		handle_GetRPCVersion(request, fd);
+	} else if (!strncmp(request->method, "Client.SetStream", 16)) {
+		log_debug("calling server Client.SetStream\n");
+		handle_client_setstream(request, fd);
 	} else if (!strncmp(request->method, "Client.SetVolume", 16)) {
 		log_debug("calling server Client.SetVolume\n");
 		handle_client_setvolume(request, fd);

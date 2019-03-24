@@ -109,29 +109,31 @@ void loop() {
 			log_error("this should never happen - timeout on poll");
 		else {
 			for (int i = 0; i < fd_index; i++) {
-				log_debug("handling event on fd %i.\n", fds[i].fd);
+				if (fds[i].revents) {
+					log_debug("handling event on fd %i.\n", fds[i].fd);
 
-				if (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx)) {
-					// this is a nightmare. alsa logic is meant to be contained in alsaplayer
-					unsigned short revents;
-					snd_pcm_poll_descriptors_revents(snapctx.alsaplayer_ctx.pcm_handle, fds, snapctx.alsaplayer_ctx.pollfd_count,
-									 &revents);
-					fds[i].revents = revents;
+					if (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx)) {
+						// this is a nightmare. alsa logic is meant to be contained in alsaplayer
+						unsigned short revents;
+						snd_pcm_poll_descriptors_revents(snapctx.alsaplayer_ctx.pcm_handle, fds,
+										 snapctx.alsaplayer_ctx.pollfd_count, &revents);
+						fds[i].revents = revents;
+					}
+
+					if ((fds[i].revents & POLLIN) && (fds[i].fd == snapctx.taskqueue_ctx.fd)) {
+						log_debug("taskqueue ready\n");
+						taskqueue_run(&snapctx.taskqueue_ctx);
+					} else if ((fds[i].revents & POLLIN) && (fds[i].fd == snapctx.intercom_ctx.fd)) {
+						log_debug("intercom ready for IO\n");
+						intercom_handle_in(&snapctx.intercom_ctx, fds[i].fd);
+					} else if ((fds[i].revents & POLLOUT) && (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx))) {
+						log_debug("alsa device ready for IO\n");
+						alsaplayer_handle(&snapctx.alsaplayer_ctx);
+						snapctx.alsaplayer_ctx.ufds[i].revents = 0;  // clear events for next iteration
+					}
+
+					fds[i].revents = 0;  // clear events for next iteration
 				}
-
-				if ((fds[i].revents & POLLIN) && (fds[i].fd == snapctx.taskqueue_ctx.fd)) {
-					log_debug("taskqueue ready\n");
-					taskqueue_run(&snapctx.taskqueue_ctx);
-				} else if ((fds[i].revents & POLLIN) && (fds[i].fd == snapctx.intercom_ctx.fd)) {
-					log_debug("intercom ready for IO\n");
-					intercom_handle_in(&snapctx.intercom_ctx, fds[i].fd);
-				} else if ((fds[i].revents & POLLOUT) && (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx))) {
-					log_debug("alsa device ready for IO\n");
-					alsaplayer_handle(&snapctx.alsaplayer_ctx);
-					snapctx.alsaplayer_ctx.ufds[i].revents = 0;  // clear events for next iteration
-				}
-
-				fds[i].revents = 0;  // clear events for next iteration
 			}
 		}
 	}
@@ -158,6 +160,9 @@ int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
 	hints.ai_socktype = SOCK_DGRAM;
 	hints.ai_flags = AI_V4MAPPED;
 	hints.ai_protocol = 0;
+
+	//	char service[7];
+	//	snprintf(service, 7, "%d", snapctx.intercom_ctx.port);
 
 	s = getaddrinfo(hostname, NULL, &hints, &result);
 	if (s != 0) {
@@ -260,11 +265,10 @@ int main(int argc, char *argv[]) {
 	taskqueue_init(&snapctx.taskqueue_ctx);
 
 	intercom_init(&snapctx.intercom_ctx);
-	intercom_hello(&snapctx.intercom_ctx, &snapctx.intercom_ctx.serverip, snapctx.intercom_ctx.port);
 
 	// we have realtime business when feeding the alsa buffer, setting prio may help on an otherwise busy client.
 	if (setpriority(PRIO_PROCESS, 0, -5)) {
-		log_error("could not set priority\n");
+		log_error("could not set priority. Adjusting priority helps on otherwise busy clients. Continuing.\n");
 	}
 
 	loop();
