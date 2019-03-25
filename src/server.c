@@ -166,7 +166,17 @@ void loop() {
 
 void usage() {
 	// TODO: write complete help message
-	puts("snapcast-server -b bufferMs -s <inputpipe>");
+	puts("snapcast-server -b bufferMs -s <inputpipe>\n");
+	puts("b	<num>		buffer <num> Ms of audio data");
+	puts("			order is important. -b must be specified before the streams.");
+	puts("v			be verbose");
+	puts("d			debug loglevel");
+	puts("s	<stream>	specify stream");
+	puts("p <port>		listen on port <port>");
+	puts("P <port>		listen on control port <port>");
+	puts("V			show version");
+	puts("");
+	puts("example: snapcast-server -b 10000 -s 'pipe:///tmp/snapcast?buffer_ms=120&name=default&sampleformat=48000:16:2&timeout_ms=1000&codec=opus' -s 'pipe:///tmp/snapcast1?buffer_ms=120&name=rammstein&sampleformat=48000:16:2&timeout_ms=1000&codec=opus' -p 1704 -v");
 }
 
 void catch_sigterm() {
@@ -194,7 +204,7 @@ int main(int argc, char *argv[]) {
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
 	int c;
-	while ((c = getopt_long(argc, argv, "Vvdh:s:b:p:f:P:", long_options, &option_index)) != -1) switch (c) {
+	while ((c = getopt_long(argc, argv, "Vvdhs:b:p:P:", long_options, &option_index)) != -1) switch (c) {
 			case 'V':
 				printf("snapclient %s\n", SOURCE_VERSION);
 #if defined(GIT_BRANCH) && defined(GIT_COMMIT_HASH)

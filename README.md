@@ -106,6 +106,24 @@ I am starting the client like this:
 snapcast-client -H <hostname-of-server> -p <port of server - 1704> -s default
 ```
 
+### Separate volume control
+
+Alsa allows to create custom volume controls. This can be achieved by editing /etc/asound.conf
+```
+Pcm.snapclient {
+    Type            softvol
+    Slave.pcm       "asymed"
+    Control.name    "snapclient"
+    Control.card    1
+}
+```
+to use this control, use the parameters:
+```
+-m snapclient
+-c hw:1
+-s snapclient
+```
+
 
 ## Status and Roadmap
 

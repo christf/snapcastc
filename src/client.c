@@ -139,7 +139,15 @@ void loop() {
 	}
 }
 
-void usage() { puts("snapclient -h <servername>"); }
+void usage() {
+	puts("snapclient [-l | -H <servername> [-L <latency_ms>] [-p <serverport>] [-c <card>] [-m <mixer>] [-s <volume control>] [-i <clientID>]  [-v] [-d] ] ");
+	puts("");
+	puts("-l		list pcm devices");
+	puts("-L		set pcm latency");
+	puts("-V		show version");
+	puts("");
+	puts("example: snapcast-client -H media -c hw:1 -m snapclient -s snapclient -i 2 -v");
+}
 
 void catch_sigterm() {
 	static struct sigaction _sigact;
