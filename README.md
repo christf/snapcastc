@@ -1,5 +1,8 @@
 # SnapCastC
 
+[![Packagecloud.io Debian](https://img.shields.io/badge/deb-packagecloud.io-844fec.svg)](https://packagecloud.io)
+[![Build Status](https://api.travis-ci.org/christf/snapcastc.svg?branch=master)](https://travis-ci.org/christf/snapcastc)
+
 This program consists of a client and a server component allowing synchronous
 audio playback over the network. This Software is heavily inspired by snapcast.
 The server obtains its input from a fifo which is fed by any audio player (or
@@ -28,9 +31,18 @@ Linux. Patches for other platforms are welcome.
 While it is important for clients to run on small devices, audio quality is 
 valued above CPU utilization. The smallest target platform is Raspberry PI B.
 
-### Time Synchronisation
 
-Snapcastc assumes that system clocks are synchronized. Use ntp to achieve that.
+## Installation
+
+Once available, stable packages will be pushed to the OSS packagecloud repository:
+```
+curl -s https://packagecloud.io/install/repositories/christf/OSS/script.deb.sh | sudo bash
+```
+
+Until that time, you are welcome to use the development packages for debian from packagecloud.
+```
+curl -s https://packagecloud.io/install/repositories/christf/dev/script.deb.sh | sudo bash
+```
 
 ## Usage
 See roadmap for implementation status.
@@ -132,8 +144,6 @@ API usage and provide scripts to be integrated into your home automation.
 
 
 ## Status and Roadmap
-
-[![Build Status](https://api.travis-ci.org/christf/snapcastc.svg?branch=master)](https://travis-ci.org/christf/snapcastc)
 
 
 * Audio Playback [Working]
