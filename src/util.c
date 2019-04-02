@@ -9,9 +9,15 @@
 #include <stdio.h>
 #include <sys/epoll.h>
 
-#define STRBUFELEMENTS 3
+#define STRBUFELEMENTS 4
 static char strbuffer[STRBUFELEMENTS][INET6_ADDRSTRLEN + 1];
 static int str_bufferoffset = 0;
+
+int max(const int a, const int b) {
+	if (a > b)
+		return a;
+	return b;
+}
 
 /* print a human-readable representation of an in6_addr struct to string buffer which can then be printed to wherever
 ** ** */
@@ -61,6 +67,7 @@ void add_fd(int efd, int fd, uint32_t events) {
 
 	int s = epoll_ctl(efd, EPOLL_CTL_ADD, fd, &event);
 	if (s == -1) {
+		log_error("error on add_fd %d on efd %d\n", fd, efd);
 		perror("epoll_ctl (ADD):");
 		exit_error("epoll_ctl");
 	}
@@ -69,6 +76,8 @@ void add_fd(int efd, int fd, uint32_t events) {
 void del_fd(int efd, int fd) {
 	int s = epoll_ctl(efd, EPOLL_CTL_DEL, fd, NULL);
 	if (s == -1) {
+		perror("epoll_ctl");
+		log_error("error on del_fd %d on efd %d\n", fd, efd);
 		exit_errno("epoll_ctl (DEL):");
 	}
 }
@@ -76,6 +85,40 @@ void del_fd(int efd, int fd) {
 const char *print_mac(const uint8_t mac[6]) {
 	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
 	snprintf(strbuffer[str_bufferoffset], 18, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	return strbuffer[str_bufferoffset];
+}
+
+const char *print_codec(int codec) {
+	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
+	if (codec == PCM)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "pcm");
+	else if (codec == OPUS)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "opus");
+	else
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "unknown");
+	return strbuffer[str_bufferoffset];
+}
+
+const char *print_stream_protocol(int protocol) {
+	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
+	if (protocol == PIPE)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "pipe");
+	else
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "unknown");
+	return strbuffer[str_bufferoffset];
+}
+
+const char *print_inputpipe_status(int status) {
+	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
+	if (status == IDLE)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "idle");
+	else if (status == PLAYING)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "playing");
+	else if (status == THROTTLE)
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "throttle");
+	else
+		snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "unknown");
+
 	return strbuffer[str_bufferoffset];
 }
 

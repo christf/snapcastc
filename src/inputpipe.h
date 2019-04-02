@@ -30,21 +30,26 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-enum inputpipe_state { IDLE = 0, PLAYING };
+enum inputpipe_state { IDLE = 0, PLAYING, THROTTLE };
 
 typedef struct {
-	struct snapctx *snapctx;
 	char *fname;
 	pcmChunk chunk;
 
 	enum inputpipe_state state;
 
 	ssize_t data_read;
+	ssize_t read_ms;
+	ssize_t samples;
+	int samplesize;
+	int channels;
 	int fd;
 
 	uint16_t chunksize;
 	uint32_t pipelength_ms;
 	struct timespec lastchunk;
+	bool initialized;
+	taskqueue_t *resume_task;
 	taskqueue_t *idle_task;
 } inputpipe_ctx;
 
@@ -53,5 +58,7 @@ typedef struct {
  * @return -1 on buffer overrun, 1 on chunk complete, 0 otherwise
  */
 int inputpipe_handle(inputpipe_ctx *ctx);
+void inputpipe_resume_read(void *d);
 void inputpipe_uninit(inputpipe_ctx *ctx);
+void inputpipe_hold(inputpipe_ctx *ctx);
 void inputpipe_init(inputpipe_ctx *ctx);

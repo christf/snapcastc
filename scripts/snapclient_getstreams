@@ -1,0 +1,16 @@
+#!/bin/bash
+# This will obtain a list of all streams that the server is handling 
+# This script must be called with the mandatory parameter: server
+# The optional parameter clientID will obtain the stream for this very client
+# ./snapclient_getstreams mediaserver.lan 2
+
+server=$1
+clientid=$2
+port=1705
+
+if [ $# -eq 1 ]; then
+  (echo  "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Server.GetStatus}\"}}"; sleep 1 ) | telnet $server $port| sed '1,3d'| jq ".result.server.groups[].name"
+elif [ $# -eq 2 ]; then
+  (echo  "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Server.GetStatus}\"}}"; sleep 1 ) | telnet $server $port| sed '1,3d'| jq ".result.server.groups[] | select(.clients[].id==$clientid) | .name"
+fi
+

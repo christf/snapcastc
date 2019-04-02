@@ -1,6 +1,9 @@
 #pragma once
 
+#include "pcmchunk.h"
+
 #include <opus/opus.h>
+#include <stdio.h>
 
 typedef struct {
 	OpusDecoder *decoder;
@@ -11,7 +14,7 @@ typedef struct {
 
 } opuscodec_ctx;
 
-void opus_init_encoder(int mss);
-void encode_opus_handle(pcmChunk *chunk);
-void opus_init_decoder();
-void decode_opus_handle(pcmChunk *chunk);
+void opus_init_encoder(opuscodec_ctx *ctx, int mss, size_t samples, size_t channels);
+void encode_opus_handle(opuscodec_ctx *ctx, pcmChunk *chunk);
+void opus_init_decoder(opuscodec_ctx *ctx, size_t samples, size_t channels);
+void decode_opus_handle(opuscodec_ctx *ctx, pcmChunk *chunk);

@@ -25,11 +25,13 @@
    */
 
 #include "socket.h"
+#include "alloc.h"
 #include "clientmgr.h"
 #include "error.h"
 #include "intercom.h"
 #include "jsonrpc.h"
 #include "snapcast.h"
+#include "stream.h"
 #include "util.h"
 
 #include <stdio.h>
@@ -74,25 +76,20 @@ const char *group_get_id() {
 	return "2427bc26-e219-8d33-901c-20493f46eb42";
 }
 
-const char *group_get_name() { return ""; }
+const char *group_get_name(stream *s) { return s->name; }
 
-const char *group_get_stream_id() {
-	// TODO implement me
-	return "default";
-}
+const char *group_get_stream_id(stream *s) { return group_get_name(s); }
 
 void json_add_time(json_object *out, struct timespec *t) {
 	json_object_object_add(out, "sec", json_object_new_int(t->tv_sec));
 	json_object_object_add(out, "usec", json_object_new_int(t->tv_nsec / 1000));
 }
 
-void json_add_group(json_object *out) {
+void json_add_group(json_object *out, stream *s) {
 	json_object *clients = json_object_new_array();
 
-	// TODO: iterate over all clients in this group
-
-	for (int i = VECTOR_LEN(snapctx.clientmgr_ctx.clients) - 1; i >= 0; --i) {
-		struct client *c = &VECTOR_INDEX(snapctx.clientmgr_ctx.clients, i);
+	for (int i = VECTOR_LEN(s->clients) - 1; i >= 0; --i) {
+		struct client *c = &VECTOR_INDEX(s->clients, i);
 
 		json_object *client = json_object_new_object();
 		json_object *config = json_object_new_object();
@@ -122,7 +119,7 @@ void json_add_group(json_object *out) {
 		json_object *snapclient = json_object_new_object();
 		json_object_object_add(snapclient, "name", json_object_new_string("Snapclient"));
 		json_object_object_add(snapclient, "protocolVersion", json_object_new_int(c->protoversion));
-		json_object_object_add(snapclient, "version", json_object_new_string("0.15.0"));
+		json_object_object_add(snapclient, "version", json_object_new_string("unknown"));
 
 		json_object_object_add(client, "snapclient", snapclient);
 
@@ -130,83 +127,62 @@ void json_add_group(json_object *out) {
 	}
 
 	json_object_object_add(out, "clients", clients);
-	json_object_object_add(out, "id", json_object_new_string(group_get_id()));
-	json_object_object_add(out, "muted", json_object_new_boolean(group_get_muted()));
-	json_object_object_add(out, "name", json_object_new_string(group_get_name()));
-	json_object_object_add(out, "stream_id", json_object_new_string(group_get_stream_id()));
+	json_object_object_add(out, "id", json_object_new_string(group_get_id(s)));
+	json_object_object_add(out, "muted", json_object_new_boolean(group_get_muted(s)));
+	json_object_object_add(out, "name", json_object_new_string(group_get_name(s)));
+	json_object_object_add(out, "stream_id", json_object_new_string(group_get_stream_id(s)));
 }
 
 void json_add_groups(json_object *out) {
 	json_object *groups = json_object_new_array();
 
-	// TODO: iterate over all groups
-	json_object *group = json_object_new_object();
-	json_add_group(group);
-	json_object_array_add(groups, group);
+	for (int i = 0; i < VECTOR_LEN(snapctx.streams); ++i) {
+		stream *s = &VECTOR_INDEX(snapctx.streams, i);
+		json_object *group = json_object_new_object();
+		json_add_group(group, s);
+		json_object_array_add(groups, group);
+	}
 
 	json_object_object_add(out, "groups", groups);
 }
 
 void json_build_serverstatus_streams(json_object *in) {
-	/* TODO IMPLEMENT THIS FUNCTION  - after implementing the data model
-	** for streams
-	"streams": [
-	{
-		"id": "default",
-			"meta": {
-				"STREAM": "default"
-			},
-			"status": "idle",
-			"uri": {
-				"fragment": "",
-				"host": "",
-				"path": "/tmp/snapfifo",
-				"query": {
-					"buffer_ms": "20",
-					"codec": "pcm",
-					"name": "default",
-					"sampleformat": "48000:16:2",
-					"timeout_ms": "1000"
-				},
-				"raw": "pipe:////tmp/snapfifo?buffer_ms=20&codec=pcm&name=default&sampleformat=48000:16:2&timeout_ms=1000",
-				"scheme": "pipe"
-			}
-	}
-	]
-	*/
-
+	// "raw": "pipe:////tmp/snapfifo?buffer_ms=20&codec=pcm&name=default&sampleformat=48000:16:2&timeout_ms=1000",
 	json_object *streams = json_object_new_array();
 
-	// for i in streams
+	for (int i = VECTOR_LEN(snapctx.streams) - 1; i >= 0; --i) {
+		stream *s = &VECTOR_INDEX(snapctx.streams, i);
 
-	json_object *stream = json_object_new_object();
-	json_object *meta = json_object_new_object();
-	json_object *uri = json_object_new_object();
-	json_object *query = json_object_new_object();
-	json_object_object_add(stream, "id", json_object_new_string("default"));
-	json_object_object_add(meta, "STREAM", json_object_new_string("default"));
-	json_object_object_add(stream, "meta", meta);
-	json_object_object_add(stream, "status", json_object_new_string("idle"));
+		json_object *stream = json_object_new_object();
+		json_object *meta = json_object_new_object();
+		json_object *uri = json_object_new_object();
+		json_object *query = json_object_new_object();
+		json_object_object_add(stream, "id", json_object_new_string(s->name));
+		json_object_object_add(meta, "STREAM", json_object_new_string(s->name));
+		json_object_object_add(stream, "meta", meta);
+		json_object_object_add(stream, "status", json_object_new_string(print_inputpipe_status(s->inputpipe.state)));
 
-	json_object_object_add(stream, "uri", uri);
-	json_object_object_add(uri, "fragment", json_object_new_string(""));
-	json_object_object_add(uri, "host", json_object_new_string(""));
-	json_object_object_add(uri, "path", json_object_new_string("/tmp/snapfifo"));
+		json_object_object_add(stream, "uri", uri);
+		json_object_object_add(uri, "fragment", json_object_new_string(""));
+		json_object_object_add(uri, "host", json_object_new_string(""));
+		json_object_object_add(uri, "path", json_object_new_string(s->inputpipe.fname));
 
-	json_object_object_add(query, "buffer_ms", json_object_new_string("20"));
-	json_object_object_add(query, "codec", json_object_new_string("ogg"));
-	json_object_object_add(query, "name", json_object_new_string("default"));
-	json_object_object_add(query, "sampleformat", json_object_new_string("48000:16:2"));
-	json_object_object_add(query, "timeout_ms", json_object_new_string("1000"));
-	json_object_object_add(uri, "query", query);
+		json_object_object_add(query, "buffer_ms", json_object_new_int(s->inputpipe.read_ms));
+		json_object_object_add(query, "codec", json_object_new_string(print_codec(s->codec)));
+		json_object_object_add(query, "name", json_object_new_string(s->name));  // the object contains s->name a lot
+		char streamformat[20] = {};
+		snprintf(streamformat, 20, "%d:%d:%d", s->inputpipe.samples, s->inputpipe.samplesize * 8, s->inputpipe.channels);
+		json_object_object_add(query, "sampleformat", json_object_new_string(streamformat));
+		json_object_object_add(query, "timeout_ms", json_object_new_int(s->inputpipe.pipelength_ms));
+		json_object_object_add(uri, "query", query);
 
-	json_object_object_add(
-	    uri, "raw", json_object_new_string("pipe:////tmp/snapfifo?buffer_ms=20&codec=ogg&name=default&sampleformat=48000:16:2&timeout_ms=1000"));
-	json_object_object_add(uri, "scheme", json_object_new_string("pipe"));
+		json_object_object_add(uri, "raw", json_object_new_string(s->raw));
+		json_object_object_add(uri, "scheme", json_object_new_string(print_stream_protocol(s->protocol)));
 
-	json_object_array_add(streams, stream);
+		json_object_array_add(streams, stream);
 
-	json_object_object_add(in, "streams", streams);  // streams - this is at the very least poorly named
+		json_object_object_add(in, "streams", streams);  // streams - this is at the very least poorly named
+	}
 }
 
 void json_build_serverstatus_server(json_object *in) {
@@ -223,7 +199,7 @@ void json_build_serverstatus_server(json_object *in) {
 	json_object_object_add(snapserver, "name", json_object_new_string("Snapserver"));
 	json_object_object_add(snapserver, "protocolVersion", json_object_new_int(PACKET_FORMAT_VERSION));
 	// json_object_object_add(snapserver, "version", json_object_new_string(SOURCE_VERSION));
-	json_object_object_add(snapserver, "version", json_object_new_string("0.15.0"));
+	json_object_object_add(snapserver, "version", json_object_new_string(SOURCE_VERSION));
 
 	json_object_object_add(server, "host", host);
 	json_object_object_add(server, "snapserver", snapserver);
@@ -241,20 +217,20 @@ void json_build_serverstatus(json_object *in) {
 void handle_server_getstatus(jsonrpc_request *request, int fd) {
 	json_object *response = json_object_new_object();
 	json_object *result = json_object_new_object();
+	json_build_serverstatus(result);
 	jsonrpc_buildresult(response, request->id, result);
 
-	json_build_serverstatus(result);
 	json_object_print_and_put(fd, response);
 }
 
 void handle_GetRPCVersion(jsonrpc_request *request, int fd) {
 	json_object *response = json_object_new_object();
 	json_object *result = json_object_new_object();
-	jsonrpc_buildresult(response, request->id, result);
 
 	json_object_object_add(result, "major", json_object_new_string(SOURCE_VERSION_MAJOR));
 	json_object_object_add(result, "minor", json_object_new_string(SOURCE_VERSION_MINOR));
 	json_object_object_add(result, "patch", json_object_new_string(SOURCE_VERSION_PATCH));
+	jsonrpc_buildresult(response, request->id, result);
 
 	json_object_print_and_put(fd, response);
 }
@@ -281,6 +257,52 @@ void socket_init(socket_ctx *ctx) {
 		exit_errno("Could not listen on status socket");
 }
 
+bool handle_client_setstream(jsonrpc_request *request, int fd) {
+	json_object *response = json_object_new_object();
+	json_object *result = json_object_new_object();
+	int clientid = 0;
+	char *target_stream_id = NULL;
+	client_t *client = NULL;
+	stream *newstream = NULL;
+
+	for (int i = VECTOR_LEN(request->parameters) - 1; i >= 0; --i) {
+		parameter *p = &VECTOR_INDEX(request->parameters, i);
+		if (!strncmp(p->name, "id", 2)) {
+			clientid = p->value.number;
+			client = find_client(clientid).client;
+			if (!client) {
+				log_error("received stream change request for unknown client %d\n", clientid);
+				break;
+			}
+		} else if (!strncmp(p->name, "stream_id", 9)) {
+			newstream = stream_find_name(p->value.string);
+			if (newstream) {
+				free(target_stream_id);
+				target_stream_id = snap_alloc(strlen(p->value.string));
+				strncpy(target_stream_id, p->value.string, strlen(p->value.string));
+			} else {
+				free(target_stream_id);
+				log_error("received stream change request for unknown stream %s\n", p->value.string);
+				break;
+			}
+		}
+	}
+
+	if (client) {
+		stream *current_stream = stream_find(client);
+		bool client_stream_is_changed = !!strncmp(current_stream->name, target_stream_id, strlen(current_stream->name));
+		if (client_stream_is_changed) {
+			intercom_stop_client(&snapctx.intercom_ctx, client);
+			stream_client_remove(current_stream, client);
+			stream_client_add(newstream, client);
+		}
+		json_object_object_add(response, "result", json_object_new_string(target_stream_id));
+	}
+	jsonrpc_buildresult(response, request->id, result);
+	json_object_print_and_put(fd, response);
+	free(target_stream_id);
+}
+
 bool handle_client_setvolume(jsonrpc_request *request, int fd) {
 	json_object *response = json_object_new_object();
 	json_object *result = json_object_new_object();
@@ -298,7 +320,7 @@ bool handle_client_setvolume(jsonrpc_request *request, int fd) {
 		parameter *p = &VECTOR_INDEX(request->parameters, i);
 		if (!strncmp(p->name, "id", 2)) {
 			clientid = p->value.number;
-			client = get_client(clientid);
+			client = find_client(clientid).client;
 			if (!client) {
 				log_error("received volume change request for unknown client %d\n", clientid);
 				break;
@@ -358,6 +380,9 @@ reply:;
 int handle_request(jsonrpc_request *request, int fd) {
 	if (!strncmp(request->method, "Server.GetRPCVersion", 20)) {
 		handle_GetRPCVersion(request, fd);
+	} else if (!strncmp(request->method, "Client.SetStream", 16)) {
+		log_debug("calling server Client.SetStream\n");
+		handle_client_setstream(request, fd);
 	} else if (!strncmp(request->method, "Client.SetVolume", 16)) {
 		log_debug("calling server Client.SetVolume\n");
 		handle_client_setvolume(request, fd);
@@ -366,16 +391,6 @@ int handle_request(jsonrpc_request *request, int fd) {
 		handle_server_getstatus(request, fd);
 	}
 	return 1;
-}
-
-void stringprocessor(jsonrpc_request *request) {
-	if (!strncmp(request->method, "Server.GetRPCVersion", 20)) {
-		log_error("calling getrpcversion\n");
-	} else if (!strncmp(request->method, "get_prefixes", 12)) {
-		log_error("belanglose Nachricht\n");
-	}
-
-	return;
 }
 
 void socket_client_remove(socket_ctx *ctx, socketclient *sc) {
@@ -388,6 +403,7 @@ int handle_line(socketclient *sc) {
 		return false;
 
 	jsonrpc_request jreq = {};
+	VECTOR_INIT(jreq.parameters);
 	log_error("parsing line: %s\n", sc->line);
 	if (!(jsonrpc_parse_string(&jreq, sc->line))) {
 		log_error("parsing unsuccessful for %s\n", sc->line);

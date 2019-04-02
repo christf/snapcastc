@@ -1,0 +1,26 @@
+#!/bin/bash
+# This will obtain a list of all streams that the server is handling 
+# This script must be called with 3 mandatory parameters: <server> <clientid> <name
+# of new stream>
+# ./snapclient_setstreams mediaserver.lan 2 
+
+server=$1
+clientid=$2
+streamname=$3
+port=1705
+set -x
+(echo  "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Client.SetStream\", \"params\":{\"id\":$clientid, \"stream_id\":\"$streamname\"}}"; sleep 1 ) | telnet $server $port| sed '1,3d'| jq .
+
+#  ".result.server.groups[] | select(.clients[].id==$clientid) | .name"
+#
+# (echo "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Client.SetVolume\",\"params\":{\"id\":$clientid, \"volume\":{\"muted\":false, \"percent\":$volume}}}";) | telnet $server $port| sed '1,3d'| jq .
+#
+#Request
+#
+#{"id":4,"jsonrpc":"2.0","method":"Group.SetStream","params":{
+#  "id":"4dcc4e3b-c699-a04b-7f0c-8260d23c43e1",
+#  "stream_id":"stream 1"}}
+#Response
+#
+#{"id":4,"jsonrpc":"2.0","result":{"stream_id":"stream 1"}}
+#

@@ -1,30 +1,49 @@
 #include "pcmchunk.h"
 #include "alloc.h"
+#include "opuscodec.h"
 #include "snapcast.h"
 #include "util.h"
 
-#include "timespec.h"
-
 #include <arpa/inet.h>
 #include <time.h>
+#include "timespec.h"
 
-void get_emptychunk(pcmChunk *ret) {
-	struct timespec t = {};
-	ret->samples = snapctx.alsaplayer_ctx.rate;
-	ret->channels = snapctx.alsaplayer_ctx.channels;
-	ret->frame_size = snapctx.alsaplayer_ctx.frame_size;
-	ret->size = snapctx.alsaplayer_ctx.rate * snapctx.readms * snapctx.alsaplayer_ctx.channels * snapctx.alsaplayer_ctx.frame_size / 1000;
-	ret->play_at_tv_sec = t.tv_sec;
-	ret->play_at_tv_nsec = t.tv_nsec;
-	ret->data = snap_alloc(ret->size);
+#define EMPTY_CHUNK_SIZE_MS 5
+
+void get_emptychunk(pcmChunk *ret, unsigned int length_ms) {
+	if (!ret)
+		return;
+	ret->size = ret->samples * length_ms * ret->channels * ret->frame_size / 1000;
+	ret->play_at_tv_sec = 0L;
+	ret->play_at_tv_nsec = 0L;
+	ret->data = snap_alloc0(ret->size);
 	ret->codec = CODEC_PCM;
-	memset(ret->data, 0, ret->size);
-	log_debug("created empty chunk with size %d\n", ret->size);
+	log_verbose("generated chunks with size %d and length %lu ms\n", ret->size, length_ms);
 }
 
-int chunk_getduration_ms(pcmChunk *chunk) { return 1000 * chunk->size / chunk->channels / chunk->frame_size / chunk->samples; }
+struct timespec chunk_get_play_at(pcmChunk *chunk) {
+	struct timespec ret = {};
+	if (chunk) {
+		ret.tv_sec = chunk->play_at_tv_sec;
+		ret.tv_nsec = chunk->play_at_tv_nsec;
+	}
+	return ret;
+}
 
-bool chunk_is_empty(pcmChunk *c) { return !(c->play_at_tv_sec > 0); }
+int chunk_getduration_ms(pcmChunk *chunk) {
+	return (chunk->channels && chunk->frame_size && chunk->samples) ? 1000 * chunk->size / chunk->channels / chunk->frame_size / chunk->samples
+									: 0;
+}
+
+bool chunk_is_empty(pcmChunk *c) { return !(c && c->play_at_tv_sec); }
+
+// this should only be available in client
+bool chunk_decode(pcmChunk *c) {
+	extern opuscodec_ctx opuscodec;
+	if (c && c->codec == CODEC_OPUS) {
+		decode_opus_handle(&opuscodec, c);
+	}
+}
 
 void chunk_ntoh(pcmChunk *chunk) {
 	chunk->play_at_tv_sec = ntohl(chunk->play_at_tv_sec);
@@ -34,8 +53,12 @@ void chunk_ntoh(pcmChunk *chunk) {
 }
 
 void chunk_free_members(pcmChunk *chunk) {
-	free(chunk->data);
-	chunk->data = NULL;
+	if (chunk) {
+		free(chunk->data);
+		chunk->play_at_tv_sec = 0;
+		chunk->data = NULL;
+		chunk->size = 0;
+	}
 }
 
 void pcmchunk_shaveoff(pcmChunk *chunk, int frames) {
@@ -62,7 +85,20 @@ void chunk_hton(pcmChunk *chunk) {
 	chunk->size = htons(chunk->size);
 }
 
-void chunk_copy_meta(pcmChunk *dest, pcmChunk *src) {
+int chunk_cmp(pcmChunk *c1, pcmChunk *c2) {
+	if (c1->play_at_tv_sec > c2->play_at_tv_sec)
+		return 1;
+	else if (c1->play_at_tv_sec < c2->play_at_tv_sec)
+		return -1;
+	else if (c1->play_at_tv_nsec > c2->play_at_tv_nsec)
+		return 1;
+	else if (c1->play_at_tv_nsec < c2->play_at_tv_nsec)
+		return -1;
+
+	return 0;
+}
+
+void chunk_copy_meta(pcmChunk *dest, const pcmChunk *src) {
 	dest->play_at_tv_sec = src->play_at_tv_sec;
 	dest->play_at_tv_nsec = src->play_at_tv_nsec;
 	dest->samples = src->samples;

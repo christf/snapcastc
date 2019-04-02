@@ -23,6 +23,7 @@
 #include "intercom.h"
 #include "opuscodec.h"
 #include "socket.h"
+#include "stream.h"
 #include "taskqueue.h"
 #include "types.h"
 
@@ -38,21 +39,14 @@ struct snapctx {
 	struct in6_addr ownip;
 
 	taskqueue_ctx taskqueue_ctx;
-	inputpipe_ctx inputpipe_ctx;
 	alsaplayer_ctx alsaplayer_ctx;
-	clientmgr_ctx clientmgr_ctx;
 	intercom_ctx intercom_ctx;
-	opuscodec_ctx opuscodec_ctx;
 	socket_ctx socket_ctx;
+
+	VECTOR(stream) streams;
 
 	int efd;
 	uint16_t bufferms;
-
-	int samples;
-	int frame_size;
-	int channels;
-
-	size_t readms;
 
 	uint16_t socketport;
 
@@ -64,5 +58,3 @@ struct snapctx {
 
 extern snapctx_t snapctx;
 
-void add_fd(int efd, int fd, uint32_t events);
-void del_fd(int efd, int fd);
