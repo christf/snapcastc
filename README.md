@@ -124,6 +124,12 @@ to use this control, use the parameters:
 -s snapclient
 ```
 
+### Scripts
+
+The scripts directory contains a set of example api calls to mute/unmute 
+clients, set their volume and move clients to different streams to illustrate 
+API usage and provide scripts to be integrated into your home automation.
+
 
 ## Status and Roadmap
 
