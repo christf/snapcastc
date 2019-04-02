@@ -1,7 +1,8 @@
 #include <stdlib.h>
 
-#include "util.h"
+#include "alloc.h"
 #include "pqueue.h"
+#include "util.h"
 
 /* Util macros */
 #define LEFT(x) (2 * (x) + 1)
@@ -20,13 +21,13 @@ void pqueue_heapify(PQueue *q, size_t idx);
 */
 PQueue *pqueue_new(int (*cmp)(const void *d1, const void *d2), size_t capacity) {
 	PQueue *res = NULL;
-//	NP_CHECK(cmp);
-	res = malloc(sizeof(*res));
-//	NP_CHECK(res);
+	if (!cmp) {
+		exit_error("pqueue: comparator must not be NULL\n");
+	}
+	res = snap_alloc(sizeof(*res));
 	res->cmp = cmp;
 	/* The inner representation of data inside the queue is an array of void* */
-	res->data = malloc(capacity * sizeof(*(res->data)));
-//	NP_CHECK(res->data);
+	res->data = snap_alloc(capacity * sizeof(*(res->data)));
 	res->size = 0;
 	res->capacity = capacity;
 	return (res);
@@ -73,11 +74,10 @@ void pqueue_enqueue(PQueue *q, const void *data) {
 }
 
 void *pqueue_peek(PQueue *q) {
-	// NP_CHECK(q);
-	log_debug("peek\n");
-	if (q->size < 1) {
+	if (!q || q->size < 1) {
 		return NULL;
 	}
+	log_debug("peek\n");
 	return q->data[0];
 }
 /**
