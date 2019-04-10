@@ -105,7 +105,10 @@ void taskqueue_run(taskqueue_ctx *ctx) {
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 
-	read(ctx->fd, &nEvents, sizeof(nEvents));
+	size_t rsize = read(ctx->fd, &nEvents, sizeof(nEvents));
+
+	if ( ! rsize)
+		log_error("could not read from taskqueue fd\n");
 
 	if (ctx->queue == NULL)
 		return;
