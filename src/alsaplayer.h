@@ -41,7 +41,6 @@ typedef struct {
 } pcm;
 
 typedef struct {
-	struct snapctx *snapctx;
 	long mixer_min;
 	long mixer_max;
 

@@ -198,7 +198,7 @@ int main(int argc, char *argv[]) {
 	snapctx.intercom_ctx.mtu = 1500;
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
 
-	snapctx.socketport = 1705;
+	snapctx.socket_ctx.port = 1705;
 	VECTOR_INIT(snapctx.streams);
 
 	int option_index = 0;
@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
 				snapctx.verbose = true;
 				break;
 			case 'P':
-				snapctx.socketport = atoi(optarg);
+				snapctx.socket_ctx.port = atoi(optarg);
 				break;
 			case 'p':
 				snapctx.intercom_ctx.port = atoi(optarg);
@@ -249,7 +249,6 @@ int main(int argc, char *argv[]) {
 
 	intercom_init(&snapctx.intercom_ctx);
 
-	snapctx.socket_ctx.port = snapctx.socketport;
 	socket_init(&snapctx.socket_ctx);
 
 	loop();

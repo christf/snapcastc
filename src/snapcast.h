@@ -48,8 +48,6 @@ struct snapctx {
 	int efd;
 	uint16_t bufferms;
 
-	uint16_t socketport;
-
 	enum operatingmode operating_mode;
 
 	bool debug;
