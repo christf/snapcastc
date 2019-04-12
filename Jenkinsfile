@@ -42,22 +42,25 @@ node {
   stage('Package') {
     parallel (
      'PackageX86': {
+	sh "mkdir -p deb/debian"
 	sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /bin/sh -c 'cd /$PROJECTDIR/build $INCREMENTCOMMAND && ../scripts/make_debian_package && mv /*.deb /$PROJECTDIR/build/'"
-	sh "cp build/*.deb deb"
+	sh "cp build/*.deb deb/debian"
 	sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /bin/sh -c 'rm -rf /$PROJECTDIR/build/'"
       },
       'PackageARM': {
+	sh "mkdir -p deb/raspbian"
 	sh "ssh pi@raspbmc 'rm -rf /tmp/snapcastc; cd /tmp; git clone https://github.com/christf/snapcastc.git; mkdir snapcastc/build; cd snapcastc/build $INCREMENTCOMMAND &&../scripts/make_debian_package'"
-	sh "scp 'pi@raspbmc:/tmp/snapcastc_*.deb' deb; ssh pi@raspbmc 'rm -rf /tmp/snapcastc*'"
+	sh "scp 'pi@raspbmc:/tmp/snapcastc_*.deb' deb/raspbian; ssh pi@raspbmc 'rm -rf /tmp/snapcastc*'"
       }
     )
   }
   
   stage('Upload') {
-    sh "package_cloud push christf/dev/debian/stretch deb/*.deb"
+    sh "package_cloud push christf/dev/debian/stretch deb/debian/*.deb"
+    sh "package_cloud push christf/dev/raspbian/stretch deb/raspbian/*.deb"
   }
   stage('Results') {
-    archiveArtifacts 'deb/*.deb'
+    archiveArtifacts 'deb/*/*.deb'
     archiveArtifacts 'testlog'
   }
   stage("Cleanup") {
