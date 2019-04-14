@@ -442,8 +442,8 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 
 	snd_pcm_sw_params_set_avail_min(ctx->pcm_handle, ctx->swparams, ctx->frames);
 
-	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, ctx->swparams, buffer_size);
-	log_verbose("start threshold is: %d\n", buffer_size);
+	snd_pcm_sw_params_set_start_threshold(ctx->pcm_handle, ctx->swparams, buffer_size / 2);
+	log_verbose("start threshold is: %d\n", buffer_size / 2);
 
 	snd_pcm_sw_params(ctx->pcm_handle, ctx->swparams);
 	ctx->initialized = true;
