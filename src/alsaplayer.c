@@ -130,14 +130,14 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		is_close = timespec_isnear(&ts_alsa_ready, &nextchunk_playat, NOT_EVEN_CLOSE_MS);
 		attempting_start_and_overshot = ((!snapctx.alsaplayer_ctx.playing) && (timespec_cmp(ts_alsa_ready, nextchunk_playat) >= 0));
 
-		chunk_is_in_past = (tdiff.sign > 0 && ! is_near && ! attempting_start_and_overshot);
+		chunk_is_in_past = (tdiff.sign > 0 && !is_near && !attempting_start_and_overshot);
 
-		if (chunk_is_in_past && ! is_close && ! chunk_is_empty(p)) {
+		if (chunk_is_in_past && !is_close && !chunk_is_empty(p)) {
 			log_error("we are behind by %s seconds: dropping this chunk!\n", print_timespec(&tdiff.time));
 			intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
 			chunk_free_members(p);
 		}
-	} while (chunk_is_in_past && ! is_close && ! chunk_is_empty(p));
+	} while (chunk_is_in_past && !is_close && !chunk_is_empty(p));
 
 	if (snapctx.alsaplayer_ctx.playing || (attempting_start_and_overshot) || is_near) {
 		intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
@@ -160,7 +160,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			adjust_speed(p, ts_alsa_ready);
 	} else {
 		int sleep_ms = NOT_EVEN_CLOSE_MS;
-		if (tdiff.sign > 0 )
+		if (tdiff.sign > 0)
 			sleep_ms = 0;
 		else if (tdiff.time.tv_sec == 0)
 			sleep_ms = tdiff.time.tv_nsec / 1000000L;
