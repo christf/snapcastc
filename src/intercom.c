@@ -480,7 +480,6 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 	log_debug("handling audio data\n");
 	if (!(ctx->receivebuffer && ctx->receivebuffer->capacity)) {
 		log_error("buffer not initialized. Old size: %lu\n", ctx->receivebuffer ? ctx->receivebuffer->capacity : 0);
-		chunk_decode(chunk);
 		realloc_intercom_buffer_when_required(ctx, ntohs(packet->bufferms), chunk_getduration_ms(chunk));
 	}
 

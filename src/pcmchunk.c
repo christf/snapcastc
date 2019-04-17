@@ -31,6 +31,7 @@ struct timespec chunk_get_play_at(pcmChunk *chunk) {
 }
 
 int chunk_getduration_ms(pcmChunk *chunk) {
+	chunk_decode(chunk); // chunk must be in pcm format to obtain the correct duration
 	return (chunk->channels && chunk->frame_size && chunk->samples) ? 1000 * chunk->size / chunk->channels / chunk->frame_size / chunk->samples
 									: 0;
 }

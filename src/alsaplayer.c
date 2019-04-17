@@ -75,7 +75,6 @@ void adjust_speed_simple(pcmChunk *chunk, double factor) {
 }
 
 void adjust_speed(pcmChunk *chunk, const struct timespec starting_playback) {
-	chunk_decode(chunk);
 	double factor = 1;
 	struct timespec nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
 	struct timespec chunk_play_end = timeAddMs(&starting_playback, chunk_getduration_ms(chunk));
@@ -154,7 +153,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
 		}
 
-		chunk_decode(p);
+		chunk_decode(p); // usually this will already be decoded by decode_first_input
 
 		if (!is_near)
 			adjust_speed(p, ts_alsa_ready);
