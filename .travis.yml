@@ -7,6 +7,7 @@ compiler:
     - gcc
 
 before_install:
+    - ./scripts/builddockerfile
     - docker build -t christf/snapcastc-build .
 
 #before_script:  

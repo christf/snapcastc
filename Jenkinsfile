@@ -25,6 +25,7 @@ node {
 	RELEASETYPE = "Release"
       }
 
+      sh "./scripts/builddockerfile"
       sh "docker build -t snapcastc-build ."
       sh "pwd > workspace"
       WORKSPACE = readFile('workspace').trim()
