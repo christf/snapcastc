@@ -94,8 +94,13 @@ void taskqueue_schedule(taskqueue_ctx *ctx) {
 		return;
 
 	struct itimerspec t = {.it_value = ctx->queue->due};
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
 
-	timerfd_settime(ctx->fd, TFD_TIMER_ABSTIME, &t, NULL);
+	if (timespec_cmp(ctx->queue->due, now) <= 0)
+		taskqueue_run(ctx);
+	else
+		timerfd_settime(ctx->fd, TFD_TIMER_ABSTIME, &t, NULL);
 }
 
 void taskqueue_run(taskqueue_ctx *ctx) {
