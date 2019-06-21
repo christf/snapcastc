@@ -43,7 +43,10 @@ bool chunk_decode(pcmChunk *c) {
 	extern opuscodec_ctx opuscodec;
 	if (c && c->codec == CODEC_OPUS) {
 		decode_opus_handle(&opuscodec, c);
+		return true;
 	}
+	else
+		return false;
 }
 
 void chunk_ntoh(pcmChunk *chunk) {
