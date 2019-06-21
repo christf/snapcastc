@@ -737,7 +737,7 @@ bool intercom_set_volume(intercom_ctx *ctx, const client_t *client, uint8_t volu
 	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION, &s->nonce, 0);
 	packet_len += assemble_volume(&packet[packet_len], get_nonce(&s->nonce), volume);
 
-	intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, packet, packet_len, client->port);
+	return intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, packet, packet_len, client->port);
 }
 
 bool intercom_stop_client(intercom_ctx *ctx, const client_t *client) {
@@ -748,7 +748,7 @@ bool intercom_stop_client(intercom_ctx *ctx, const client_t *client) {
 	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION, &s->nonce, 0);
 	packet_len += assemble_stop(&packet[packet_len], get_nonce(&s->nonce));
 
-	intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, packet, packet_len, client->port);
+	return intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, packet, packet_len, client->port);
 }
 
 bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, const int port) {
