@@ -39,7 +39,9 @@ Once available, stable packages will be pushed to the OSS packagecloud repositor
 curl -s https://packagecloud.io/install/repositories/christf/OSS/script.deb.sh | sudo bash
 ```
 
-Until that time, you are welcome to use the development packages for debian from packagecloud.
+Until that time, you are welcome to use the development packages for debian and 
+raspbian from packagecloud.
+
 ```
 curl -s https://packagecloud.io/install/repositories/christf/dev/script.deb.sh | sudo bash
 ```
@@ -248,10 +250,6 @@ consider the [Seven Rules](https://chris.beams.io/posts/git-commit/) when
 writing commit messages.
 
 This approach makes reviewing and reasoning about changes a lot easier.
-
-## Packages
-
-* A debian package for x86 and raspberry pi would be very helpful.
 
 ## Communication
 

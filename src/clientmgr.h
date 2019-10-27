@@ -3,7 +3,6 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/time.h>
-#include "client.h"
 #include "stream.h"
 #include "taskqueue.h"
 #include "vector.h"
@@ -28,7 +27,6 @@ client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ho
 struct client *get_client(stream *s, const uint32_t clientid);
 
 client_stream find_client(const uint32_t id);
-int client_cmp(const struct client *c1, const struct client *c2);
 
 void print_client(struct client *client);
 bool clientmgr_refresh_client(struct client *client);

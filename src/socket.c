@@ -28,7 +28,7 @@
 #include "alloc.h"
 #include "clientmgr.h"
 #include "error.h"
-#include "intercom.h"
+#include "intercom_srv.h"
 #include "jsonrpc.h"
 #include "snapcast.h"
 #include "stream.h"

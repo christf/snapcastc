@@ -2,7 +2,7 @@
 #include "alloc.h"
 #include "inputpipe.h"
 #include "inputpipe.h"
-#include "intercom.h"
+#include "intercom_srv.h"
 #include "packet_types.h"
 #include "snapcast.h"
 #include "stream.h"
@@ -25,7 +25,7 @@ void clientmgr_send_audio_buffer_to_client(client_t *client) {
 	}
 }
 
-bool clientmgr_client_refreshvolume(client_t *client, uint8_t volume) { intercom_set_volume(&snapctx.intercom_ctx, client, volume); }
+bool clientmgr_client_refreshvolume(client_t *client, uint8_t volume) { return intercom_set_volume(&snapctx.intercom_ctx, client, volume); }
 
 bool clientmgr_client_setmute(client_t *c, bool mute) {
 	bool mute_changed = false;
@@ -203,15 +203,6 @@ bool clientmgr_refresh_client(struct client *client) {
 	}
 
 	return true;
-}
-
-int client_cmp(const struct client *c1, const struct client *c2) {
-	if (c1->id > c2->id)
-		return 1;
-	else if (c1->id < c2->id)
-		return -1;
-	else
-		return 0;
 }
 
 void clientmgr_init() {}

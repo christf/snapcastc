@@ -31,6 +31,7 @@ struct timespec chunk_get_play_at(pcmChunk *chunk) {
 }
 
 int chunk_getduration_ms(pcmChunk *chunk) {
+	chunk_decode(chunk); // chunk must be in pcm format to obtain the correct duration
 	return (chunk->channels && chunk->frame_size && chunk->samples) ? 1000 * chunk->size / chunk->channels / chunk->frame_size / chunk->samples
 									: 0;
 }
@@ -42,7 +43,10 @@ bool chunk_decode(pcmChunk *c) {
 	extern opuscodec_ctx opuscodec;
 	if (c && c->codec == CODEC_OPUS) {
 		decode_opus_handle(&opuscodec, c);
+		return true;
 	}
+	else
+		return false;
 }
 
 void chunk_ntoh(pcmChunk *chunk) {

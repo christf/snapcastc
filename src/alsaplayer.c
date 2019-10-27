@@ -3,6 +3,7 @@
 #include "snapcast.h"
 #include "syscallwrappers.h"
 #include "util.h"
+#include "intercom_client.h"
 
 #include <alsa/asoundlib.h>
 #include <math.h>
@@ -75,7 +76,6 @@ void adjust_speed_simple(pcmChunk *chunk, double factor) {
 }
 
 void adjust_speed(pcmChunk *chunk, const struct timespec starting_playback) {
-	chunk_decode(chunk);
 	double factor = 1;
 	struct timespec nextchunk_playat = intercom_get_time_next_audiochunk(&snapctx.intercom_ctx);
 	struct timespec chunk_play_end = timeAddMs(&starting_playback, chunk_getduration_ms(chunk));
@@ -154,7 +154,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
 		}
 
-		chunk_decode(p);
+		chunk_decode(p); // usually this will already be decoded by decode_first_input
 
 		if (!is_near)
 			adjust_speed(p, ts_alsa_ready);
@@ -322,7 +322,14 @@ void mixer_init(alsaplayer_ctx *ctx) {
 	snd_mixer_selem_id_set_name(sid, ctx->mixer);
 	ctx->mixer_elem = snd_mixer_find_selem(ctx->mixer_handle, sid);
 
-	snd_mixer_selem_get_playback_volume_range(ctx->mixer_elem, &ctx->mixer_min, &ctx->mixer_max);
+	if (ctx->mixer_elem)
+		snd_mixer_selem_get_playback_volume_range(ctx->mixer_elem, &ctx->mixer_min, &ctx->mixer_max);
+	else {
+		ctx->is_softvol = true;
+		ctx->softvol_level = 100;
+		log_error("could not initialize mixer %s. Continuing with bogus volume values. You will not be able to control the volume\n.",
+			  ctx->mixer);
+	}
 }
 
 void mixer_uninit(alsaplayer_ctx *ctx) {
@@ -332,18 +339,28 @@ void mixer_uninit(alsaplayer_ctx *ctx) {
 
 uint8_t obtain_volume(alsaplayer_ctx *ctx) {
 	long volume = 0;
-	mixer_init(ctx);
-	snd_mixer_selem_get_playback_volume(ctx->mixer_elem, SND_MIXER_SCHN_MONO, &volume);
-	mixer_uninit(ctx);
-	uint8_t ret = (uint8_t)(round((double)volume * 100 / ctx->mixer_max));
-	log_debug("Obtained volume (raw): %d\n", ret);
+	uint8_t ret = ctx->softvol_level;
+	if (!ctx->is_softvol) {
+		mixer_init(ctx);
+		if (ctx->mixer_elem) {
+			snd_mixer_selem_get_playback_volume(ctx->mixer_elem, SND_MIXER_SCHN_MONO, &volume);
+			ret = (uint8_t)(round((double)volume * 100 / ctx->mixer_max));
+			log_debug("Obtained volume (raw): %d\n", ret);
+		}
+		mixer_uninit(ctx);
+	}
 	return ret;
 }
 
 void adjustVolume(alsaplayer_ctx *ctx, uint8_t volume) {
-	mixer_init(ctx);
-	snd_mixer_selem_set_playback_volume_all(ctx->mixer_elem, volume * ctx->mixer_max / 100);
-	mixer_uninit(ctx);
+	if (ctx->is_softvol) {
+		ctx->softvol_level = volume;
+	} else {
+		mixer_init(ctx);
+		if (ctx->mixer_elem)
+			snd_mixer_selem_set_playback_volume_all(ctx->mixer_elem, volume * ctx->mixer_max / 100);
+		mixer_uninit(ctx);
+	}
 }
 
 void alsaplayer_init(alsaplayer_ctx *ctx) {

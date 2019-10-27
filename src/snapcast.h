@@ -20,7 +20,7 @@
 #include "alsaplayer.h"
 #include "clientmgr.h"
 #include "inputpipe.h"
-#include "intercom.h"
+#include "intercom_common.h"
 #include "opuscodec.h"
 #include "socket.h"
 #include "stream.h"
@@ -30,8 +30,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-
-enum operatingmode { CLIENT, SERVER };
 
 struct snapctx {
 	char *servername;  // snapcast server
@@ -47,8 +45,6 @@ struct snapctx {
 
 	int efd;
 	uint16_t bufferms;
-
-	enum operatingmode operating_mode;
 
 	bool debug;
 	bool verbose;

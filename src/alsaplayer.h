@@ -70,6 +70,8 @@ typedef struct {
 
 	bool initialized;
 	bool playing;
+	bool is_softvol;
+	uint8_t softvol_level;
 	size_t empty_chunks_in_row;
 	taskqueue_t *close_task;
 	pcm pcm;
