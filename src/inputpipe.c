@@ -125,11 +125,12 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 void inputpipe_resume_read(void *d) {
 	log_debug("resuming reading from pipe\n");
 	stream *s = (stream *)d;
-	if (VECTOR_LEN(s->clients)) {
-		if (!s->inputpipe.initialized)
+	if (VECTOR_LEN(s->clients) && s->inputpipe.state != PLAYING) {
+		if (!s->inputpipe.initialized) {
 			inputpipe_init(&s->inputpipe);
+		}
 		add_fd(snapctx.efd, s->inputpipe.fd, EPOLLIN);
-		s->inputpipe.state == PLAYING;
+		s->inputpipe.state = PLAYING;
 	}
 }
 
