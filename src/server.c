@@ -35,6 +35,7 @@
 #include "util.h"
 #include "vector.h"
 #include "version.h"
+#include "intercom_srv.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -193,7 +194,6 @@ int main(int argc, char *argv[]) {
 	bool input = false;
 	snapctx.verbose = false;
 	snapctx.debug = false;
-	snapctx.operating_mode = SERVER;
 
 	snapctx.intercom_ctx.mtu = 1500;
 	snapctx.intercom_ctx.port = INTERCOM_PORT;

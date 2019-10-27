@@ -3,6 +3,7 @@
 #include "snapcast.h"
 #include "syscallwrappers.h"
 #include "util.h"
+#include "intercom_client.h"
 
 #include <alsa/asoundlib.h>
 #include <math.h>

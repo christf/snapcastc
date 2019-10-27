@@ -129,6 +129,15 @@ const char *print_chunk(pcmChunk *chunk) {
 	return strbuffer[str_bufferoffset];
 }
 
+int client_cmp(const struct client *c1, const struct client *c2) {
+	if (c1->id > c2->id)
+		return 1;
+	else if (c1->id < c2->id)
+		return -1;
+	else
+		return 0;
+}
+
 void print_packet(unsigned char *buf, int size) {
 	if (!snapctx.debug)
 		return;

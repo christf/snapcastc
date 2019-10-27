@@ -4,14 +4,9 @@ list(APPEND CMAKE_REQUIRED_DEFINITIONS '-D_GNU_SOURCE')
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SNAPCAST_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
-# TODO the clientmgr should only be linked into the server. since intercom
-# includes it, it currently must be in both. inputpipe is included by clientmgr as well. it should be removed from the client. Alsaplayer is included by intercom
-# as well for the client side, dito for pqueue.
-# Maybe split intercom into a client and server part?
-
-list(APPEND COMMON_DEPS util.c inputpipe.c taskqueue.c timespec.c inputpipe.c vector.c syscallwrappers.c intercom.c clientmgr.c pcmchunk.c opuscodec.c alsaplayer.c stream.c pqueue.c)
-list(APPEND CLIENT_DEPS)
-list(APPEND SERVER_DEPS socket.c jsonrpc.c)
+list(APPEND COMMON_DEPS util.c taskqueue.c timespec.c vector.c syscallwrappers.c intercom.c pcmchunk.c opuscodec.c)
+list(APPEND CLIENT_DEPS intercom_client.c alsaplayer.c pqueue.c)
+list(APPEND SERVER_DEPS intercom_srv.c clientmgr.c inputpipe.c socket.c jsonrpc.c stream.c)
 
 add_library(common_libs OBJECT ${COMMON_DEPS})
 add_library(client_deps OBJECT ${CLIENT_DEPS})
@@ -19,7 +14,7 @@ add_library(server_deps OBJECT ${SERVER_DEPS})
 
 add_executable(snapcast-server server.c $<TARGET_OBJECTS:server_deps> $<TARGET_OBJECTS:common_libs>)
 add_executable(snapcast-client client.c $<TARGET_OBJECTS:client_deps> $<TARGET_OBJECTS:common_libs>)
-add_executable(snapcast-test test.c $<TARGET_OBJECTS:client_deps> $<TARGET_OBJECTS:server_deps> $<TARGET_OBJECTS:common_libs>)
+add_executable(snapcast-test test.c $<TARGET_OBJECTS:server_deps> $<TARGET_OBJECTS:common_libs>)
 
 target_link_libraries(snapcast-server ${JSON_C_LIBRARIES})
 target_link_libraries(snapcast-server ${ALSA_LIBRARIES})

@@ -8,7 +8,7 @@
 
 #include <stdbool.h>
 
-enum codec { PCM = 1, OPUS };
+enum codec { PCM = 1, OPUS, INVALID };
 enum protocol { PIPE = 1 };
 
 // this will be used in the client for decoding

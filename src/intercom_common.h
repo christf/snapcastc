@@ -15,6 +15,8 @@
 
 #define PACKET_FORMAT_VERSION 1
 #define CLIENTNAME_MAXLEN
+#define INTERCOM_MAX_RECENT 1000
+#define NONCE_MAX 4294967294
 
 enum { CLIENT_OPERATION, AUDIO_DATA, SERVER_OPERATION };  // Packet types
 enum { REQUEST, HELLO };				  // TLV types client op
@@ -72,20 +74,6 @@ typedef struct __attribute__((__packed__)) {
 	// after this a dynamic buffer is appended to hold TLV.
 } intercom_packet_audio;
 
-typedef VECTOR(client_t) client_v;
-
-struct intercom_task {
-	uint16_t packet_len;
-	uint8_t *packet;
-	struct in6_addr *recipient;
-	taskqueue_t *check_task;
-	uint8_t retries_left;
-};
-
-struct buffer_cleanup_task {
-	audio_packet ap;
-};
-
 typedef struct {
 	struct in6_addr serverip;
 	VECTOR(intercom_packet_hdr) recent_packets;
@@ -101,18 +89,13 @@ typedef struct {
 	PQueue *receivebuffer;
 } intercom_ctx;
 
-void intercom_send_audio(intercom_ctx *ctx, stream *s);
-void intercom_recently_seen_add(intercom_ctx *ctx, intercom_packet_hdr *hdr);
 bool intercom_send_packet_unicast(intercom_ctx *ctx, const struct in6_addr *recipient, uint8_t *packet, ssize_t packet_len, int port);
-void intercom_seek(intercom_ctx *ctx, const struct in6_addr *address);
-void intercom_init_unicast(intercom_ctx *ctx);
-void intercom_init(intercom_ctx *ctx);
 void intercom_handle_in(intercom_ctx *ctx, int fd);
-bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, const int port);
-bool intercom_stop_client(intercom_ctx *ctx, const client_t *client);
-bool intercom_set_volume(intercom_ctx *ctx, const client_t *client, uint8_t volume);
+void intercom_recently_seen_add(intercom_ctx *ctx, intercom_packet_hdr *hdr);
+void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_len, struct in6_addr *peer, uint16_t port);
 
-struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx);
+int cmp_audiopacket(const audio_packet *ap1, const audio_packet *ap2);
+bool intercom_recently_seen(intercom_ctx *ctx, intercom_packet_hdr *hdr);
+int assemble_header(intercom_packet_hdr *hdr, uint8_t type, uint32_t *nonce, uint16_t clientid);
+uint32_t get_nonce(uint32_t *nonce);
 
-bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret);
-void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *c);

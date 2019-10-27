@@ -34,6 +34,7 @@
 #include "util.h"
 #include "vector.h"
 #include "version.h"
+#include "intercom_client.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -201,7 +202,6 @@ int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
 }
 
 int main(int argc, char *argv[]) {
-	snapctx.operating_mode = CLIENT;
 	snapctx.verbose = false;
 	snapctx.debug = false;
 

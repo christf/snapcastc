@@ -1,8 +1,9 @@
 #include "stream.h"
 #include "alloc.h"
-#include "intercom.h"
+#include "intercom_common.h"
 #include "snapcast.h"
 #include "util.h"
+#include "inputpipe.h"
 
 #include "clientmgr.h"
 
@@ -29,6 +30,7 @@ int parse_codec(const char *codec) {
 		return OPUS;
 	if (!strcmp(codec, "pcm"))
 		return PCM;
+	return INVALID;
 }
 
 stream *stream_find(const client_t *client) {

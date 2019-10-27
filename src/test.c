@@ -26,7 +26,6 @@
 
 #include "alloc.h"
 #include "error.h"
-#include "intercom.h"
 #include "snapcast.h"
 #include "socket.h"
 #include "stream.h"
