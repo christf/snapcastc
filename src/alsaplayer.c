@@ -288,9 +288,13 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	snd_pcm_close(ctx->pcm_handle);
 	ctx->initialized = ctx->playing = false;
 	free(ctx->ufds);
+	free(ctx->params);
 
-	if (ctx->close_task)
+	if (ctx->close_task) {
+		taskqueue_t *close_task  = ctx->close_task;
 		taskqueue_remove(ctx->close_task);
+		free(close_task);
+	}
 	ctx->close_task = NULL;
 
 	if (ctx->main_poll_fd)
