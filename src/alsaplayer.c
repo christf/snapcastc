@@ -43,7 +43,7 @@ void adjust_speed_soxr(pcmChunk *chunk, double factor) {
 	size_t olen = (size_t)(chunk->size * orate / chunk->samples + .5);
 	size_t odone;
 
-	uint8_t *out = snap_alloc(factor * chunk->size);
+	uint8_t *out = snap_alloc(chunk->size * factor + chunk->size);
 
 	soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_QQ, 0);   // TODO: make this configurable - Raspi: SOXR_QQ, desktop: SOXR_LQ
 	soxr_io_spec_t io_spec = soxr_io_spec(SOXR_INT16_I, SOXR_INT16_I);  // TODO this should not be hard-coded.
