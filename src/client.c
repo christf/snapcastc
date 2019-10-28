@@ -83,12 +83,11 @@ int alsa_get_fd_amount() {
 }
 
 void loop() {
-	struct pollfd fds[snapctx.alsaplayer_ctx.pollfd_count + 2];  // allocate fds for alsa events
-
 	int fd_index = 0;
+	fd_index += alsa_get_fd_amount();
+	struct pollfd fds[fd_index + 2];  // allocate fds for alsa events
 	snapctx.alsaplayer_ctx.main_poll_fd = fds;  // alsa fds must be the first
 
-	fd_index += alsa_get_fd_amount();
 
 	fds[fd_index].fd = snapctx.taskqueue_ctx.fd;
 	fds[fd_index].events = POLLIN;
@@ -205,6 +204,7 @@ int main(int argc, char *argv[]) {
 	snapctx.verbose = false;
 	snapctx.debug = false;
 
+	snapctx.alsaplayer_ctx.pollfd_count = 0;
 	snapctx.alsaplayer_ctx.initialized = false;
 
 	snapctx.bufferms = 1000;
