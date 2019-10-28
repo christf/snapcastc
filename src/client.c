@@ -90,6 +90,10 @@ void loop() {
 	struct pollfd fds[fd_index + 2];  // allocate fds for alsa events
 	snapctx.alsaplayer_ctx.main_poll_fd = fds;  // alsa fds must be the first
 
+	for (int i = 0; i < fd_index; i++) {
+		fds[i].fd = -1;
+		fds[i].events = POLLIN;
+	}
 
 	fds[fd_index].fd = snapctx.taskqueue_ctx.fd;
 	fds[fd_index].events = POLLIN;
