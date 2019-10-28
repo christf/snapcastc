@@ -56,6 +56,7 @@
 snapctx_t snapctx = {};
 
 void sig_term_handler(int signum, siginfo_t *info, void *ptr) {
+	alsaplayer_remove_task(&snapctx.alsaplayer_ctx);
 	alsaplayer_uninit(&snapctx.alsaplayer_ctx);
 	write(STDERR_FILENO, SIGTERM_MSG, sizeof(SIGTERM_MSG));
 	_exit(EXIT_SUCCESS);
@@ -77,6 +78,7 @@ int alsa_get_fd_amount() {
 
 	fd_amount = aplay_tmp_ctx.pollfd_count;
 
+	alsaplayer_remove_task(&aplay_tmp_ctx);
 	alsaplayer_uninit(&aplay_tmp_ctx);
 
 	return fd_amount;

@@ -379,6 +379,8 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 		    (chunk->samples != snapctx.alsaplayer_ctx.rate)) {
 			log_error("chunk size is not equal to alsa init size - (re-)initializing with samples: %lu sample size: %d, channels %d\n",
 				  chunk->samples, chunk->frame_size, chunk->channels);
+
+			alsaplayer_remove_task(&snapctx.alsaplayer_ctx);
 			alsaplayer_uninit(&snapctx.alsaplayer_ctx);
 		}
 

@@ -279,6 +279,15 @@ void alsaplayer_pcm_list() {
 	snd_device_name_free_hint(hints);
 }
 
+void alsaplayer_remove_task(alsaplayer_ctx *ctx) {
+
+	if (ctx->close_task) {
+		taskqueue_remove(ctx->close_task);
+		free(ctx->close_task);
+	}
+	ctx->close_task = NULL;
+}
+
 void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	if (!ctx->initialized)
 		return;
@@ -289,13 +298,6 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 	ctx->initialized = ctx->playing = false;
 	free(ctx->ufds);
 	free(ctx->params);
-
-	if (ctx->close_task) {
-		taskqueue_t *close_task  = ctx->close_task;
-		taskqueue_remove(ctx->close_task);
-		free(close_task);
-	}
-	ctx->close_task = NULL;
 
 	if (ctx->main_poll_fd)
 		for (int i = 0; i < ctx->pollfd_count; ++i) {
