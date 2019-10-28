@@ -205,6 +205,13 @@ bool remove_request(uint32_t nonce) {
 
 int tlv_get_length(uint8_t *packet) { return packet[1]; }
 
+void free_intercom_task(void *d) {
+	struct intercom_task *data = d;
+	free(data->packet);
+	free(data->recipient);
+	free(data);
+}
+
 void request_task(void *d) {
 	struct intercom_task *data = d;
 	struct intercom_task *ndata = snap_alloc0(sizeof(struct intercom_task));
@@ -223,7 +230,7 @@ void request_task(void *d) {
 
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len,
 						     snapctx.intercom_ctx.port);
-			ndata->check_task = post_task(&snapctx.taskqueue_ctx, 0, 100, request_task, free, ndata);
+			ndata->check_task = post_task(&snapctx.taskqueue_ctx, 0, 100, request_task, free_intercom_task, ndata);
 		} else {
 			log_debug("Could not find request for id %lu - it was most likely already served.\n", req_nonce);
 		}
@@ -242,13 +249,6 @@ int assemble_request(uint8_t *packet, uint32_t nonce) {
 	return packet[1];
 }
 
-void free_intercom_task(void *d) {
-	struct intercom_task *data = d;
-	free(data->packet);
-	free(data->recipient);
-	free(data);
-}
-
 void intercom_send_request(intercom_ctx *ctx, audio_packet *mp) {
 	struct intercom_task *data = snap_alloc0(sizeof(struct intercom_task));
 	data->packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_request));
@@ -260,12 +260,11 @@ void intercom_send_request(intercom_ctx *ctx, audio_packet *mp) {
 	int interval_ms = 100;
 
 	data->retries_left = snapctx.bufferms / interval_ms;
-	data->check_task = NULL;
 
-	data->recipient = snap_alloc_aligned(sizeof(struct in6_addr), 16);
+	data->recipient = snap_alloc_aligned(sizeof(struct in6_addr), sizeof(struct in6_addr));
 	memcpy(data->recipient, &ctx->serverip, sizeof(struct in6_addr));
 
-	data->check_task = post_task(&snapctx.taskqueue_ctx, 0, 0, request_task, free_intercom_task, data);
+	post_task(&snapctx.taskqueue_ctx, 0, 0, request_task, free_intercom_task, data);
 }
 
 

@@ -473,7 +473,7 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 }
 
 bool is_alsafd(const int fd, const alsaplayer_ctx *ctx) {
-	for (int i = 0; i < ctx->pollfd_count; i++) {
+	for (int i = 0; ctx->initialized && i < ctx->pollfd_count; i++) {
 		struct pollfd *pfd = &ctx->ufds[i];
 
 		if (fd == pfd->fd)
