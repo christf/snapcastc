@@ -20,4 +20,4 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Synchronous Audio Playback
  snapcastc play back audio synchronously that was streamed over the network.
  Very similar to Sonos or LMS. It can cope with shaky networks better through
- usage of UDP and uses Opus.
+ usage of UDP and Opus.

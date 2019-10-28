@@ -1,5 +1,5 @@
 #!/bin/sh
 version="$(head -n1 ../debian/changelog|cut -d"(" -f 2 | cut -d")" -f1|cut -d"-" -f1)"
 tar cf ../../snapcastc_${version}.orig.tar.lzma --lzma --exclude build --exclude .git --exclude debian --exclude .kdev4 --exclude "obj-*" .
-debuild -i -us -uc -F -jauto
+debuild -I.git -Ibuild -i -us -uc -F -jauto
 
