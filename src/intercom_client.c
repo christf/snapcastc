@@ -280,7 +280,9 @@ void remove_old_data_from_queue(intercom_ctx *ctx) {
 		oldest_play_at = chunk_get_play_at(oldest);
 		while (oldest && oldest_play_at.tv_sec && timespec_cmp(ctime, oldest_play_at) > 0) {
 			log_verbose("removing old chunk\n");
-			pqueue_dequeue(ctx->receivebuffer);
+			pcmChunk *p = pqueue_dequeue(ctx->receivebuffer);
+			chunk_free_members(p);
+			free(p);
 			pcmChunk *oldest = pqueue_peek(ctx->receivebuffer);
 			oldest_play_at = chunk_get_play_at(oldest);
 		}
