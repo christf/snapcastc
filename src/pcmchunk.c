@@ -38,7 +38,6 @@ int chunk_getduration_ms(pcmChunk *chunk) {
 
 bool chunk_is_empty(pcmChunk *c) { return !(c && c->play_at_tv_sec); }
 
-// this should only be available in client
 bool chunk_decode(pcmChunk *c) {
 	extern opuscodec_ctx opuscodec;
 	if (c && c->codec == CODEC_OPUS) {

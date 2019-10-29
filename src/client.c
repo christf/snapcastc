@@ -56,6 +56,7 @@
 snapctx_t snapctx = {};
 
 void sig_term_handler(int signum, siginfo_t *info, void *ptr) {
+	alsaplayer_remove_task(&snapctx.alsaplayer_ctx);
 	alsaplayer_uninit(&snapctx.alsaplayer_ctx);
 	write(STDERR_FILENO, SIGTERM_MSG, sizeof(SIGTERM_MSG));
 	_exit(EXIT_SUCCESS);
@@ -77,18 +78,22 @@ int alsa_get_fd_amount() {
 
 	fd_amount = aplay_tmp_ctx.pollfd_count;
 
+	alsaplayer_remove_task(&aplay_tmp_ctx);
 	alsaplayer_uninit(&aplay_tmp_ctx);
 
 	return fd_amount;
 }
 
 void loop() {
-	struct pollfd fds[snapctx.alsaplayer_ctx.pollfd_count + 2];  // allocate fds for alsa events
-
 	int fd_index = 0;
+	fd_index += alsa_get_fd_amount();
+	struct pollfd fds[fd_index + 2];  // allocate fds for alsa events
 	snapctx.alsaplayer_ctx.main_poll_fd = fds;  // alsa fds must be the first
 
-	fd_index += alsa_get_fd_amount();
+	for (int i = 0; i < fd_index; i++) {
+		fds[i].fd = -1;
+		fds[i].events = POLLIN;
+	}
 
 	fds[fd_index].fd = snapctx.taskqueue_ctx.fd;
 	fds[fd_index].events = POLLIN;
@@ -205,6 +210,7 @@ int main(int argc, char *argv[]) {
 	snapctx.verbose = false;
 	snapctx.debug = false;
 
+	snapctx.alsaplayer_ctx.pollfd_count = 0;
 	snapctx.alsaplayer_ctx.initialized = false;
 
 	snapctx.bufferms = 1000;

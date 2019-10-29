@@ -80,6 +80,7 @@ typedef struct {
 void alsaplayer_handle(alsaplayer_ctx *ctx);
 void alsaplayer_init(alsaplayer_ctx *ctx);
 void alsaplayer_uninit(alsaplayer_ctx *ctx);
+void alsaplayer_remove_task(alsaplayer_ctx *ctx);
 void init_alsafd();
 uint8_t obtain_volume(alsaplayer_ctx *ctx);
 void alsaplayer_pcm_list();

@@ -108,12 +108,8 @@ void taskqueue_schedule(taskqueue_ctx *ctx) {
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 
-	if (timespec_cmp(ctx->queue->due, now) <= 0)
-		taskqueue_run(ctx);
-	else {
-		log_debug("It is now: %s, scheduling next task for %s\n", print_timespec(&now), print_timespec(&ctx->queue->due));
-		timerfd_settime(ctx->fd, TFD_TIMER_ABSTIME, &t, NULL);
-	}
+	log_debug("It is now: %s, scheduling next task for %s\n", print_timespec(&now), print_timespec(&ctx->queue->due));
+	timerfd_settime(ctx->fd, TFD_TIMER_ABSTIME, &t, NULL);
 }
 
 void taskqueue_run(taskqueue_ctx *ctx) {

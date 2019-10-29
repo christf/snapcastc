@@ -92,8 +92,6 @@ void loop() {
 					perror("received signal was");
 					stream *s = stream_find_fd(events[i].data.fd);
 					if (s) {
-						if (s->inputpipe.state == PLAYING)
-							del_fd(snapctx.efd, events[i].data.fd);
 						inputpipe_uninit(&s->inputpipe);
 						clientmgr_stop_clients(s);
 						inputpipe_init(&s->inputpipe);

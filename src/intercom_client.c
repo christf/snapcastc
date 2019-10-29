@@ -101,13 +101,15 @@ void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 		if (ret)
 			get_emptychunk(ret, 5);
 	} else {
-		if (ret)
-			memcpy(ret, c, sizeof(pcmChunk));
-
 		log_verbose("retrieved audio chunk [size: %d, samples: %d, channels: %d, timestamp %zu.%zu]  cached chunks: %zu/%zu\n", c->size,
 			    c->samples, c->channels, c->play_at_tv_sec, c->play_at_tv_nsec, ctx->receivebuffer->size, ctx->receivebuffer->capacity);
 		print_packet(c->data, c->size);
+
+		if (ret) {
+			memcpy(ret, c, sizeof(pcmChunk));
+		}
 	}
+	free(c);
 }
 
 bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret) {
@@ -205,6 +207,13 @@ bool remove_request(uint32_t nonce) {
 
 int tlv_get_length(uint8_t *packet) { return packet[1]; }
 
+void free_intercom_task(void *d) {
+	struct intercom_task *data = d;
+	free(data->packet);
+	free(data->recipient);
+	free(data);
+}
+
 void request_task(void *d) {
 	struct intercom_task *data = d;
 	struct intercom_task *ndata = snap_alloc0(sizeof(struct intercom_task));
@@ -223,7 +232,7 @@ void request_task(void *d) {
 
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len,
 						     snapctx.intercom_ctx.port);
-			ndata->check_task = post_task(&snapctx.taskqueue_ctx, 0, 100, request_task, free, ndata);
+			ndata->check_task = post_task(&snapctx.taskqueue_ctx, 0, 100, request_task, free_intercom_task, ndata);
 		} else {
 			log_debug("Could not find request for id %lu - it was most likely already served.\n", req_nonce);
 		}
@@ -242,13 +251,6 @@ int assemble_request(uint8_t *packet, uint32_t nonce) {
 	return packet[1];
 }
 
-void free_intercom_task(void *d) {
-	struct intercom_task *data = d;
-	free(data->packet);
-	free(data->recipient);
-	free(data);
-}
-
 void intercom_send_request(intercom_ctx *ctx, audio_packet *mp) {
 	struct intercom_task *data = snap_alloc0(sizeof(struct intercom_task));
 	data->packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_request));
@@ -260,12 +262,11 @@ void intercom_send_request(intercom_ctx *ctx, audio_packet *mp) {
 	int interval_ms = 100;
 
 	data->retries_left = snapctx.bufferms / interval_ms;
-	data->check_task = NULL;
 
-	data->recipient = snap_alloc_aligned(sizeof(struct in6_addr), 16);
+	data->recipient = snap_alloc_aligned(sizeof(struct in6_addr), sizeof(struct in6_addr));
 	memcpy(data->recipient, &ctx->serverip, sizeof(struct in6_addr));
 
-	data->check_task = post_task(&snapctx.taskqueue_ctx, 0, 0, request_task, free_intercom_task, data);
+	post_task(&snapctx.taskqueue_ctx, 0, 0, request_task, free_intercom_task, data);
 }
 
 
@@ -279,7 +280,9 @@ void remove_old_data_from_queue(intercom_ctx *ctx) {
 		oldest_play_at = chunk_get_play_at(oldest);
 		while (oldest && oldest_play_at.tv_sec && timespec_cmp(ctime, oldest_play_at) > 0) {
 			log_verbose("removing old chunk\n");
-			pqueue_dequeue(ctx->receivebuffer);
+			pcmChunk *p = pqueue_dequeue(ctx->receivebuffer);
+			chunk_free_members(p);
+			free(p);
 			pcmChunk *oldest = pqueue_peek(ctx->receivebuffer);
 			oldest_play_at = chunk_get_play_at(oldest);
 		}
@@ -379,6 +382,8 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 		    (chunk->samples != snapctx.alsaplayer_ctx.rate)) {
 			log_error("chunk size is not equal to alsa init size - (re-)initializing with samples: %lu sample size: %d, channels %d\n",
 				  chunk->samples, chunk->frame_size, chunk->channels);
+
+			alsaplayer_remove_task(&snapctx.alsaplayer_ctx);
 			alsaplayer_uninit(&snapctx.alsaplayer_ctx);
 		}
 
