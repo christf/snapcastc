@@ -96,7 +96,8 @@ void adjust_speed(pcmChunk *chunk, const struct timespec starting_playback) {
 void decode_first_input(void *d) {
 	pcmChunk *p;
 	intercom_peeknextaudiochunk(&snapctx.intercom_ctx, &p);
-	chunk_decode(p);
+	if (chunk_decode(p))
+		log_debug("decoded outside of time critical processing, in decode_first_input\n");
 }
 
 int timing_off_silence_chunk(pcmChunk *p, const timediff *tdiff) {
@@ -150,11 +151,10 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
 			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
 					(int)(1.2 * snapctx.bufferms) % 1000);
-
 			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
 		}
 
-		chunk_decode(p); // usually this will already be decoded by decode_first_input
+		chunk_decode(p);
 
 		if (!is_near)
 			adjust_speed(p, ts_alsa_ready);
@@ -212,10 +212,16 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	if ((pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, chunk.size / chunk.channels / chunk.frame_size)) == -EPIPE) {
 		log_error("Alsa buffer drained. This will be audible.\n");
 		snd_pcm_prepare(ctx->pcm_handle);
-	} else if (pcm < 0) {
+		pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, chunk.size / chunk.channels / chunk.frame_size);
+	}
+
+	if (pcm < 0) {
 		log_error("ERROR. Can't write to PCM device. %s, snd_pcm_recover(%d)\n", snd_strerror(pcm),
 			  (int)snd_pcm_recover(ctx->pcm_handle, pcm, 0));
-	} else if (pcm < chunk.size / chunk.channels / chunk.frame_size) {
+		pcm = snd_pcm_writei(ctx->pcm_handle, chunk.data, chunk.size / chunk.channels / chunk.frame_size);
+	}
+
+	if (pcm < chunk.size / chunk.channels / chunk.frame_size) {
 		log_debug("delay frames (split): %d\n", delayp);
 		if (!ctx->overflow) {
 			ctx->overflow = snap_alloc(sizeof(pcmChunk));
@@ -482,3 +488,4 @@ bool is_alsafd(const int fd, const alsaplayer_ctx *ctx) {
 
 	return false;
 }
+
