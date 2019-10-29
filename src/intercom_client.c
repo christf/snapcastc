@@ -101,13 +101,15 @@ void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 		if (ret)
 			get_emptychunk(ret, 5);
 	} else {
-		if (ret)
-			memcpy(ret, c, sizeof(pcmChunk));
-
 		log_verbose("retrieved audio chunk [size: %d, samples: %d, channels: %d, timestamp %zu.%zu]  cached chunks: %zu/%zu\n", c->size,
 			    c->samples, c->channels, c->play_at_tv_sec, c->play_at_tv_nsec, ctx->receivebuffer->size, ctx->receivebuffer->capacity);
 		print_packet(c->data, c->size);
+
+		if (ret) {
+			memcpy(ret, c, sizeof(pcmChunk));
+		}
 	}
+	free(c);
 }
 
 bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret) {
