@@ -124,7 +124,7 @@ const char *print_inputpipe_status(int status) {
 
 const char *print_chunk(pcmChunk *chunk) {
 	str_bufferoffset = (str_bufferoffset + 1) % STRBUFELEMENTS;
-	snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "codec: %i play_at: %lu.%09lu", chunk->codec, chunk->play_at_tv_sec,
+	snprintf(strbuffer[str_bufferoffset], INET6_ADDRSTRLEN, "codec: %i play_at: %u.%09u", chunk->codec, chunk->play_at_tv_sec,
 		 chunk->play_at_tv_nsec);
 	return strbuffer[str_bufferoffset];
 }
