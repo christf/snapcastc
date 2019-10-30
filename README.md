@@ -95,7 +95,7 @@ Options marked with (*) are not implemented yet.
 
 I am starting snapserver like this:
 ```
-snapcast-server -b 25000 -s "pipe:///tmp/snapfifo?buffer_ms=120&codec=opus&name=default&sampleformat=48000:16:2&timeout_ms=1000" -p 1704
+snapcast-server -b 25000 -s "pipe:///tmp/snapfifo?buffer_ms=120&codec=opus&name=default&sampleformat=48000:16:2&timeout_ms=10000" -p 1704
 ```
 
 ### Client
@@ -152,14 +152,15 @@ API usage and provide scripts to be integrated into your home automation.
 * Usage of UDP for transporting media data [Working]
 * Support for Opus [Working]
 * Synchronous playback by dropping / inserting single frames  [Working]
-* Synchronous playback by time stretching audio chunks using librubberband  [patches welcome]
-* Support for Snapcast android app [patches welcome]
+* Synchronous playback by time stretching audio chunks using libsoxr [Working]
+* Synchronous playback by time stretching audio chunks using librubberband while maintaining pitch [patches welcome]
+* Support for Snapcast andoid app [patches welcome]
 * implement missing command line options [patches welcome]
 
 
 ## Limitations
 
-* The Audio player will has to resample to a fixed sample rate.
+* The Audio player will have to resample to a fixed sample rate.
 * exclusively Linux is supported (patches welcome)
 
 ## Building SnapCastC
