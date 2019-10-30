@@ -93,7 +93,6 @@ void loop() {
 					stream *s = stream_find_fd(events[i].data.fd);
 					if (s) {
 						inputpipe_uninit(&s->inputpipe);
-						clientmgr_stop_clients(s);
 						inputpipe_init(&s->inputpipe);
 						add_fd(snapctx.efd, s->inputpipe.fd, EPOLLIN);
 					}
