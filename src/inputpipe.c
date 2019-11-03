@@ -157,5 +157,8 @@ void inputpipe_init(inputpipe_ctx *ctx) {
 	ctx->data_read = 0;
 	ctx->chunk.data = snap_alloc(ctx->chunksize);
 	ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
-	ctx->initialized = true;
+	if (ctx->fd == -1)
+		exit_errno("unable to open input pipe %s", ctx->fname);
+	else
+		ctx->initialized = true;
 }
