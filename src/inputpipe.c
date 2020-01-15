@@ -96,8 +96,9 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 
 		if (timespec_cmp(ctime, play_at) > 0) {
 			log_error(
-			    "We are horribly late when reading from the pipes - Using current timestamp to play back current chunk. Consider "
-			    "adjusting timeout_ms for this stream.\n");
+			    "Either this is the first chunk we read for the first client on an inputstream or We are horribly late when reading from "
+			    "the pipes. Using current timestamp to play back current chunk. If this occurs during playback in contrast to the very "
+			    "beginning, consider adjusting timeout_ms for this stream.\n");
 			play_at = timeAddMs(&ctime, COLD_START_OFFSET_MS);
 		} else {
 			play_at = timeAddMs(&play_at, ctx->read_ms);
