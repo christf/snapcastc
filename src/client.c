@@ -146,7 +146,7 @@ void loop() {
 }
 
 void usage() {
-	puts("snapclient [-l | -H <servername> [-L <latency_ms>] [-p <serverport>] [-c <card>] [-m <mixer>] [-s <volume control>] [-i <clientID>]  [-v] [-d] ] ");
+	puts("snapclient [-l | -H <servername> [-L <latency_ms>] [-p <serverport>] [-c <card>] [-m <mixer>] [-s <pcm name>] [-i <clientID>]  [-v] [-d] ] ");
 	puts("");
 	puts("-l		list pcm devices");
 	puts("-L		set pcm latency");
