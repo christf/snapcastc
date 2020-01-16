@@ -87,6 +87,7 @@ typedef struct {
 
 	size_t lastreceviedseqno;
 	PQueue *receivebuffer;
+	taskqueue_t *hello_task;
 } intercom_ctx;
 
 bool intercom_send_packet_unicast(intercom_ctx *ctx, const struct in6_addr *recipient, uint8_t *packet, ssize_t packet_len, int port);
