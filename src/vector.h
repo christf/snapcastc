@@ -142,6 +142,7 @@ void _snap_vector_delete(snap_vector_desc_t *desc, void **data, size_t pos, size
    */
 #define VECTOR_INIT(v)                \
 	({                            \
+		v.data = NULL;        \
 		v.desc.length = 0;    \
 		v.desc.allocated = 0; \
 	})
