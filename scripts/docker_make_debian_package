@@ -1,0 +1,13 @@
+#!/bin/sh -e
+# Run this script inside a docker container
+# It will build the debian package for snapcastc
+# and place them in the deb dir in the project path
+#
+# to execute this script just pass:
+# /bin/sh -c "/project/scripts/docker_make_debian_package"
+# as CMD to docker run
+
+cd /project
+dpkg-buildpackage
+mkdir -p deb
+mv ../snapcastc* deb
