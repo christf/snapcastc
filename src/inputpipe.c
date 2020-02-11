@@ -96,8 +96,9 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 
 		if (timespec_cmp(ctime, play_at) > 0) {
 			log_error(
-			    "We are horribly late when reading from the pipes - Using current timestamp to play back current chunk. Consider "
-			    "adjusting timeout_ms for this stream.\n");
+			    "Either this is the first chunk we read for the first client on an inputstream or We are horribly late when reading from "
+			    "the pipes. Using current timestamp to play back current chunk. If this occurs during playback in contrast to the very "
+			    "beginning, consider adjusting timeout_ms for this stream.\n");
 			play_at = timeAddMs(&ctime, COLD_START_OFFSET_MS);
 		} else {
 			play_at = timeAddMs(&play_at, ctx->read_ms);
@@ -157,5 +158,8 @@ void inputpipe_init(inputpipe_ctx *ctx) {
 	ctx->data_read = 0;
 	ctx->chunk.data = snap_alloc(ctx->chunksize);
 	ctx->fd = open(ctx->fname, O_RDONLY | O_NONBLOCK);
-	ctx->initialized = true;
+	if (ctx->fd == -1)
+		exit_errno("unable to open input pipe %s", ctx->fname);
+	else
+		ctx->initialized = true;
 }

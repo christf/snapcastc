@@ -5,7 +5,8 @@ BUILD_DEPS="$(perl -ne 'next if /^#/; $p=(s/^Build-Depends:\s*/ / or (/^ / and $
 cat <<EOF > Dockerfile
 FROM debian
 # RUN apt-get update && apt-get install -y crossbuild-essential-armhf
-RUN apt-get update && apt-get install -y $BUILD_DEPS
+RUN apt-get update && apt-get install -y $BUILD_DEPS devscripts
 # RUN dpkg --add-architecture armhf %% RUN apt-get -a=armhf build-dep snapcastc
 CMD ['make']
 EOF
+

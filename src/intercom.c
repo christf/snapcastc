@@ -36,7 +36,7 @@ bool intercom_send_packet_unicast(intercom_ctx *ctx, const struct in6_addr *reci
 }
 
 bool intercom_recently_seen(intercom_ctx *ctx, intercom_packet_hdr *hdr) {
-	for (int i = 0; i < VECTOR_LEN(ctx->recent_packets); i++) {
+	for (size_t i = VECTOR_LEN(ctx->recent_packets) - 1 ; i < VECTOR_LEN(ctx->recent_packets); i++) {
 		intercom_packet_hdr *ref_hdr = &VECTOR_INDEX(ctx->recent_packets, i);
 
 		if (ref_hdr->nonce == hdr->nonce && ref_hdr->type == hdr->type)

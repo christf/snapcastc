@@ -126,7 +126,7 @@ bool stream_parse(stream *s, const char *raw) {
 
 void stream_client_add(stream *s, client_t *c) {
 	VECTOR_ADD(s->clients, *c);
-	log_verbose("added client %d(%s) to stream %s\n", c->id, c->name, s->name);
+	log_verbose("added client %zu(%s) to stream %s\n", c->id, c->name, s->name);
 	if ((VECTOR_LEN(s->clients) == 1) && (s->inputpipe.state == IDLE)) {
 		// TODO: it would be excellent to re-set the timestamps in the buffer allowing playback where we left off if no other client was
 		// active

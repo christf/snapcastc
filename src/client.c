@@ -84,6 +84,11 @@ int alsa_get_fd_amount() {
 	return fd_amount;
 }
 
+void resume_polling(void *d) {
+	struct pollfd *fds = (struct pollfd*)d;
+	fds->fd = snapctx.intercom_ctx.fd;
+}
+
 void loop() {
 	int fd_index = 0;
 	fd_index += alsa_get_fd_amount();
@@ -132,6 +137,14 @@ void loop() {
 					} else if ((fds[i].revents & POLLIN) && (fds[i].fd == snapctx.intercom_ctx.fd)) {
 						log_debug("intercom ready for IO\n");
 						intercom_handle_in(&snapctx.intercom_ctx, fds[i].fd);
+					} else if (( fds[i].revents & POLLERR) && (fds[i].fd == snapctx.intercom_ctx.fd)) {
+						log_error("Error on network layer, could not reach server. Re-initializing.\n");
+						intercom_uninit(&snapctx.intercom_ctx);
+						alsaplayer_uninit(&snapctx.alsaplayer_ctx);
+						post_task(&snapctx.taskqueue_ctx, 1, 0, intercom_reinit, NULL, (void*)&snapctx.intercom_ctx);
+					} else if (( fds[i].revents & POLLNVAL) && (fds[i].fd == snapctx.intercom_ctx.fd)) {
+						fds[fd_index-1].fd = -1;
+						post_task(&snapctx.taskqueue_ctx, 1, 0, resume_polling, NULL, &fds[fd_index-1]);
 					} else if ((fds[i].revents & POLLOUT) && (is_alsafd(fds[i].fd, &snapctx.alsaplayer_ctx))) {
 						log_debug("alsa device ready for IO\n");
 						alsaplayer_handle(&snapctx.alsaplayer_ctx);
@@ -146,7 +159,7 @@ void loop() {
 }
 
 void usage() {
-	puts("snapclient [-l | -H <servername> [-L <latency_ms>] [-p <serverport>] [-c <card>] [-m <mixer>] [-s <volume control>] [-i <clientID>]  [-v] [-d] ] ");
+	puts("snapclient [-l | -H <servername> [-L <latency_ms>] [-p <serverport>] [-c <card>] [-m <mixer>] [-s <pcm name>] [-i <clientID>]  [-v] [-d] ] ");
 	puts("");
 	puts("-l		list pcm devices");
 	puts("-L		set pcm latency");

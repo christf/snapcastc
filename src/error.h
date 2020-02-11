@@ -30,8 +30,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define exit_errno(message) _exit_error(1, errno, "%s", message)
-
 static inline void _exit_error(int status, int errnum, const char *format, ...) {
 	va_list ap;
 	va_start(ap, format);
@@ -45,6 +43,13 @@ static inline void _exit_error(int status, int errnum, const char *format, ...) 
 	if (status == -1)
 		abort();
 	exit(status);
+}
+
+static inline void exit_errno(const char *format, ...) {
+	va_list ap;
+	va_start(ap, format);
+	_exit_error(1, errno, format, ap);
+	va_end(ap);
 }
 
 static inline void exit_error(const char *format, ...) {

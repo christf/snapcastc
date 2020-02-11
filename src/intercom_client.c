@@ -84,7 +84,7 @@ void hello_task(void *d) {
 	packet_len += assemble_hello((void *)(&data->packet[packet_len]));
 
 	intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len, snapctx.intercom_ctx.port);
-	data->check_task = post_task(&snapctx.taskqueue_ctx, 1, 500, hello_task, NULL, data);
+	data->ctx->hello_task = post_task(&snapctx.taskqueue_ctx, 1, 500, hello_task, NULL, data);
 }
 
 
@@ -123,15 +123,15 @@ bool intercom_hello(intercom_ctx *ctx, const struct in6_addr *recipient, const i
 	data->packet_len = sizeof(intercom_packet_op) + sizeof(tlv_hello);
 	data->packet = snap_alloc(data->packet_len);
 
-	log_error("intercom hello nonce: %lu\n", nonce);
+	log_verbose("intercom hello nonce: %lu\n", nonce);
 	assemble_header(&((intercom_packet_op *)data->packet)->hdr, CLIENT_OPERATION, &nonce, ctx->nodeid);
-	log_error("intercom hello nonce: %lu\n", nonce);
 
 	if (recipient) {
 		data->recipient = snap_alloc_aligned(sizeof(struct in6_addr), 16);
 		memcpy(data->recipient, recipient, sizeof(struct in6_addr));
 	}
-	data->check_task = post_task(&snapctx.taskqueue_ctx, 0, 0, hello_task, NULL, data);
+	data->ctx = ctx;
+	ctx->hello_task = post_task(&snapctx.taskqueue_ctx, 0, 0, hello_task, NULL, data);
 	return true;
 }
 
@@ -183,7 +183,7 @@ void copy_intercom_task(struct intercom_task *old, struct intercom_task *new) {
 	memcpy(new->packet, old->packet, new->packet_len);
 
 	new->recipient = NULL;
-	new->check_task = old->check_task;
+	new->ctx = old->ctx;
 	if (old->recipient) {
 		new->recipient = snap_alloc_aligned(sizeof(struct in6_addr), sizeof(struct in6_addr));
 		memcpy(new->recipient, old->recipient, sizeof(struct in6_addr));
@@ -232,7 +232,7 @@ void request_task(void *d) {
 
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len,
 						     snapctx.intercom_ctx.port);
-			ndata->check_task = post_task(&snapctx.taskqueue_ctx, 0, 100, request_task, free_intercom_task, ndata);
+			post_task(&snapctx.taskqueue_ctx, 0, 100, request_task, free_intercom_task, ndata);
 		} else {
 			log_debug("Could not find request for id %lu - it was most likely already served.\n", req_nonce);
 		}
@@ -416,9 +416,10 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 		if (intercom_recently_seen(ctx, hdr)) {
 			audio_packet ap = {.nonce = hdr->nonce};
 			audio_packet *already_requesting = VECTOR_LSEARCH(&ap, ctx->missing_packets, cmp_audiopacket);
-			if (already_requesting) {
+			if (already_requesting)
 				log_error("DROPPING audio packet with id %lu which we have previously seen yet newly requested.\n", hdr->nonce);
-			}
+			else 
+				log_error("DROPPING audio packet with id %lu which we have previously seen.\n", hdr->nonce);
 			return;
 		}
 
@@ -436,13 +437,8 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 	}
 }
 
-
-void intercom_init(intercom_ctx *ctx) {
-	obtainrandom(&nonce, sizeof(uint32_t), 0);
-	ctx->receivebuffer = NULL;
-
-	VECTOR_INIT(ctx->recent_packets);
-	VECTOR_INIT(ctx->missing_packets);
+void intercom_reinit(void *d) {
+	intercom_ctx *ctx = (intercom_ctx*) d;
 
 	ctx->fd = socket(PF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0);
 	if (ctx->fd < 0)
@@ -458,5 +454,27 @@ void intercom_init(intercom_ctx *ctx) {
 		exit(EXIT_FAILURE);
 	}
 	intercom_hello(ctx, &ctx->serverip, ctx->port);
+}
+
+void intercom_uninit(intercom_ctx *ctx) {
+	taskqueue_remove(ctx->hello_task);
+	close(ctx->fd);
+	ctx->lastreceviedseqno = 0;
+
+	while (pqueue_peek(ctx->receivebuffer)) {
+		pcmChunk *p = pqueue_dequeue(ctx->receivebuffer);
+		chunk_free_members(p);
+		free(p);
+	}
+}
+
+void intercom_init(intercom_ctx *ctx) {
+	obtainrandom(&nonce, sizeof(uint32_t), 0);
+	ctx->receivebuffer = NULL;
+
+	VECTOR_INIT(ctx->recent_packets);
+	VECTOR_INIT(ctx->missing_packets);
+
+	intercom_reinit(ctx);
 }
 

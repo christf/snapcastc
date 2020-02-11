@@ -244,7 +244,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 
 void alsaplayer_uninit_task(void *d) {
 	alsaplayer_ctx *ctx = (alsaplayer_ctx *)d;
-	log_verbose("unititializing alsa after timeout\n");
+	log_verbose("uninitializing alsa after timeout\n");
 	alsaplayer_uninit(ctx);
 }
 
