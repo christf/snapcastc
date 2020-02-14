@@ -82,7 +82,7 @@ int assemble_stop(uint8_t *packet, uint32_t nonce) {
 
 bool intercom_set_volume(intercom_ctx *ctx, const client_t *client, uint8_t volume) {
 	int packet_len = 0;
-	uint8_t *packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_op));
+	uint8_t *packet = snap_alloc(sizeof(intercom_packet_op) + sizeof(tlv_op) + sizeof(volume));
 
 	stream *s = stream_find(client);
 	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION, &s->nonce, 0);
