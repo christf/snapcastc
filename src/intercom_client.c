@@ -94,10 +94,17 @@ struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx) {
 	return chunk_get_play_at(buf);
 }
 
+bool underrun = false;
+
 void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 	pcmChunk *c = pqueue_dequeue(ctx->receivebuffer);
 	if (!c) {
-		log_error("BUFFER UNDERRUN\n");
+		if (underrun)
+			log_verbose("BUFFER UNDERRUN\n");
+		else
+			log_error("BUFFER UNDERRUN\n");
+
+		underrun = true;
 		if (ret)
 			get_emptychunk(ret, 5);
 	} else {
@@ -295,6 +302,7 @@ void intercom_put_chunk(intercom_ctx *ctx, pcmChunk *chunk) {
 	remove_old_data_from_queue(ctx);
 
 	pqueue_enqueue(ctx->receivebuffer, chunk);
+	underrun = false;
 
 	log_debug("placed chunk in receivebuffer\n");
 }
