@@ -42,12 +42,12 @@ int assemble32(uint8_t *dst, uint32_t *src) {
 void remove_old_audiodata_task(void *data) {
 	stream *s = (stream *)data;
 	struct timespec ctime, play_at;
-	obtainsystime(&ctime);
 	struct timespec age;
 
 	if (!VECTOR_LEN(s->clients))
 		return;
 
+	obtainsystime(&ctime);
 	do {
 		audio_packet *ap = &VECTOR_INDEX(s->packet_buffer, 0);
 
