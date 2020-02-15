@@ -52,7 +52,7 @@ void remove_old_audiodata_task(void *data) {
 		audio_packet *ap = &VECTOR_INDEX(s->packet_buffer, 0);
 
 		pcmChunk chunk;
-		pcmChunk *pchunk = (pcmChunk *)&((uint8_t *)ap->data)[CHUNK_HEADER_SIZE + sizeof(intercom_packet_audio)];
+		pcmChunk *pchunk = (pcmChunk *)&((uint8_t *)ap->data)[sizeof(intercom_packet_audio)];
 		chunk_copy_meta(&chunk, pchunk);
 		chunk_ntoh(&chunk);
 
@@ -107,7 +107,7 @@ bool intercom_stop_client(intercom_ctx *ctx, const client_t *client) {
 void intercom_send_audio(intercom_ctx *ctx, stream *s) {
 	pcmChunk *chunk = &(s->inputpipe.chunk);
 	log_debug("sending %d Bytes of audio data\n", chunk->size);
-	uint8_t packet[CHUNK_HEADER_SIZE + chunk->size];
+	uint8_t packet[sizeof(intercom_packet_audio) + CHUNK_HEADER_SIZE + chunk->size];
 
 	ssize_t packet_len;
 	packet_len = assemble_header(&((intercom_packet_audio *)packet)->hdr, AUDIO_DATA, &s->nonce, 0);
