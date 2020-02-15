@@ -52,7 +52,7 @@ void remove_old_audiodata_task(void *data) {
 		audio_packet *ap = &VECTOR_INDEX(s->packet_buffer, 0);
 
 		pcmChunk chunk;
-		pcmChunk *pchunk = (pcmChunk *)&((uint8_t *)ap->data)[CHUNK_HEADER_SIZE + sizeof(intercom_packet_audio)];
+		pcmChunk *pchunk = (pcmChunk *)&((uint8_t *)ap->data)[sizeof(intercom_packet_audio)];
 		chunk_copy_meta(&chunk, pchunk);
 		chunk_ntoh(&chunk);
 
