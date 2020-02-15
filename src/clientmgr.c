@@ -99,7 +99,7 @@ void delete_client_internal(stream *s, client_t *c) {
 		print_client(c);
 		stream_client_remove(s, c);
 	} else {
-		log_debug("Client [%lu] unknown: cannot delete\n", c->id);
+		log_error("Client [%lu] unknown: cannot delete\n", c ? c->id : 0);
 	}
 }
 

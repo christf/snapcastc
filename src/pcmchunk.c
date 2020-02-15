@@ -18,7 +18,7 @@ void get_emptychunk(pcmChunk *ret, unsigned int length_ms) {
 	ret->play_at_tv_nsec = 0L;
 	ret->data = snap_alloc0(ret->size);
 	ret->codec = CODEC_PCM;
-	log_verbose("generated chunks with size %d and length %lu ms\n", ret->size, length_ms);
+	log_debug("generated chunks with size %d and length %lu ms\n", ret->size, length_ms);
 }
 
 struct timespec chunk_get_play_at(pcmChunk *chunk) {
