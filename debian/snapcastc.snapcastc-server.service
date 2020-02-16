@@ -1,6 +1,6 @@
 [Unit]
 Description=SnapCastC Server
-After=network.target auditd.service
+After=network.target
 
 [Service]
 EnvironmentFile=-/etc/default/snapcastc
@@ -12,4 +12,3 @@ RestartPreventExitStatus=255
 
 [Install]
 WantedBy=multi-user.target
-Alias=snapcastc-server.service
