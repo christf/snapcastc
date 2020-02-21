@@ -1,0 +1,14 @@
+[Unit]
+Description=SnapCastC Client
+After=network.target
+
+[Service]
+EnvironmentFile=-/etc/default/snapcastc
+ExecStart=/usr/bin/snapcast-client $SNAPCAST_CLIENTOPTS
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartPreventExitStatus=255
+
+[Install]
+WantedBy=multi-user.target

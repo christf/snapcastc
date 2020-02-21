@@ -1,0 +1,7 @@
+.debhelper/
+debhelper-build-stamp
+*.debhelper.log
+*.debhelper
+*.substvars
+snapcastc/
+files
