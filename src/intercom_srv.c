@@ -47,6 +47,9 @@ void remove_old_audiodata_task(void *data) {
 	if (!VECTOR_LEN(s->clients))
 		return;
 
+	if (!VECTOR_LEN(s->packet_buffer))
+		return;
+
 	obtainsystime(&ctime);
 	do {
 		audio_packet *ap = &VECTOR_INDEX(s->packet_buffer, 0);
@@ -63,7 +66,7 @@ void remove_old_audiodata_task(void *data) {
 
 		free(ap->data);
 		VECTOR_DELETE(s->packet_buffer, 0);  // always remove the oldest element
-	} while (timespec_cmp(age, play_at) > 0);
+	} while (VECTOR_LEN(s->packet_buffer) && timespec_cmp(age, play_at) > 0);
 }
 
 
