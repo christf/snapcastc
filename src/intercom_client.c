@@ -314,6 +314,12 @@ bool is_next_chunk(uint32_t seq) {
 		((seq - 1) == ctx->lastreceviedseqno && ctx->lastreceviedseqno != NONCE_MAX));
 };
 
+bool already_requesting(intercom_ctx *ctx, uint32_t nonce) {
+	audio_packet ap = {.nonce = nonce};
+	audio_packet *already_requesting = VECTOR_LSEARCH(&ap, ctx->missing_packets, cmp_audiopacket);
+	return !!already_requesting;
+}
+
 bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int packet_len) {
 	// TODO: Implementing TLV format for audio data will de-couple readms from the packet size.
 	uint8_t *packetpointer = &((uint8_t *)packet)[sizeof(intercom_packet_audio)];
@@ -368,10 +374,9 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 					size_t max_requests = max(ctx->lastreceviedseqno, this_seqno - ctx->receivebuffer->capacity) + 1;
 					for (size_t i = max_requests; i < this_seqno; ++i) {
 						log_verbose("requested packet with seqno: %lu\n", i);
-						audio_packet ap = {.nonce = i};
 
-						audio_packet *already_requesting = VECTOR_LSEARCH(&ap, ctx->missing_packets, cmp_audiopacket);
-						if (!already_requesting) {
+						if (!already_requesting(ctx, i)) {
+							audio_packet ap = {.nonce = i};
 							VECTOR_ADD(snapctx.intercom_ctx.missing_packets, ap);
 							limit_missing_packets(ctx, ctx->receivebuffer->capacity);
 							intercom_send_request(ctx, &ap);
@@ -422,9 +427,7 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 
 	if (hdr->version == PACKET_FORMAT_VERSION) {
 		if (intercom_recently_seen(ctx, hdr)) {
-			audio_packet ap = {.nonce = hdr->nonce};
-			audio_packet *already_requesting = VECTOR_LSEARCH(&ap, ctx->missing_packets, cmp_audiopacket);
-			if (already_requesting)
+			if (already_requesting(ctx, hdr->nonce))
 				log_error("DROPPING audio packet with id %lu which we have previously seen yet newly requested.\n", hdr->nonce);
 			else 
 				log_error("DROPPING audio packet with id %lu which we have previously seen.\n", hdr->nonce);
