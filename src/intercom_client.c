@@ -373,13 +373,12 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 					// TODO: place multiple TLV for request into a single packet for more efficiency
 					size_t max_requests = max(ctx->lastreceviedseqno, this_seqno - ctx->receivebuffer->capacity) + 1;
 					for (size_t i = max_requests; i < this_seqno; ++i) {
-						log_verbose("requested packet with seqno: %lu\n", i);
-
 						if (!already_requesting(ctx, i)) {
 							audio_packet ap = {.nonce = i};
 							VECTOR_ADD(snapctx.intercom_ctx.missing_packets, ap);
 							limit_missing_packets(ctx, ctx->receivebuffer->capacity);
 							intercom_send_request(ctx, &ap);
+							log_verbose("requested packet with seqno: %lu\n", i);
 						}
 					}
 				}
