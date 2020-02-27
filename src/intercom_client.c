@@ -224,7 +224,6 @@ void free_intercom_task(void *d) {
 
 void request_task(void *d) {
 	struct intercom_task *data = d;
-	struct intercom_task *ndata = snap_alloc0(sizeof(struct intercom_task));
 	intercom_packet_hdr *req = (intercom_packet_hdr *)data->packet;
 	req->nonce = get_nonce(&nonce);
 
@@ -234,6 +233,7 @@ void request_task(void *d) {
 		audio_packet key = {.nonce = req_nonce};
 		audio_packet *ap = VECTOR_LSEARCH(&key, snapctx.intercom_ctx.missing_packets, cmp_audiopacket);
 		if (ap) {
+			struct intercom_task *ndata = snap_alloc0(sizeof(struct intercom_task));
 			log_debug("Requesting missing packet with id %lu\n", req_nonce);
 			copy_intercom_task(data, ndata);
 			ndata->retries_left--;
