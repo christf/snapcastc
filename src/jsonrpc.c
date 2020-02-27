@@ -76,7 +76,7 @@ bool jsonrpc_parse_string(jsonrpc_request *result, const char *line) {
 				parameter p;
 
 				p.type = json_object_get_type(val);
-				p.name = strdup(key);
+				p.name = snap_strdup(key);
 				log_debug("key: %s ", key);
 				switch (p.type) {
 					case json_type_null:
@@ -99,14 +99,14 @@ bool jsonrpc_parse_string(jsonrpc_request *result, const char *line) {
 						json_object *tmp = NULL;
 						if (!json_object_object_get_ex(params, key, &tmp))
 							log_error("could not get json object %s\n", key);
-						p.value.json_string = strdup(json_object_to_json_string(tmp));
+						p.value.json_string = snap_strdup(json_object_to_json_string(tmp));
 						break;
 					case json_type_array:
 						log_error("found json_type_array - NOT IMPLEMENTED. THIS SHOULD NOT HAPPEN.\n");
 						break;
 					case json_type_string:
 						log_debug("found json_type_string\n");
-						p.value.string = strdup(json_object_get_string(val));
+						p.value.string = snap_strdup(json_object_get_string(val));
 						break;
 				}
 				VECTOR_ADD(result->parameters, p);
