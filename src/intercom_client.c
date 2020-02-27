@@ -94,7 +94,7 @@ struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx) {
 	return chunk_get_play_at(buf);
 }
 
-bool underrun = false;
+static bool underrun = false;
 
 void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 	pcmChunk *c = pqueue_dequeue(ctx->receivebuffer);
@@ -108,6 +108,7 @@ void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 		if (ret)
 			get_emptychunk(ret, 5);
 	} else {
+		underrun = false;
 		log_verbose("retrieved audio chunk [size: %d, samples: %d, channels: %d, timestamp %zu.%zu]  cached chunks: %zu/%zu\n", c->size,
 			    c->samples, c->channels, c->play_at_tv_sec, c->play_at_tv_nsec, ctx->receivebuffer->size, ctx->receivebuffer->capacity);
 		print_packet(c->data, c->size);
