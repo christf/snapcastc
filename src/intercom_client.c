@@ -468,7 +468,10 @@ void intercom_reinit(void *d) {
 }
 
 void intercom_uninit(intercom_ctx *ctx) {
-	taskqueue_remove(ctx->hello_task);
+	free(((struct intercom_task*)(ctx->hello_task->data))->packet);
+	free(((struct intercom_task*)(ctx->hello_task->data))->recipient);
+	free(ctx->hello_task->data);
+	drop_task(ctx->hello_task);
 	close(ctx->fd);
 	ctx->lastreceviedseqno = 0;
 
