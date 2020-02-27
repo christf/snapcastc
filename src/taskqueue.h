@@ -35,6 +35,7 @@ void taskqueue_remove(taskqueue_t *elem);
 void taskqueue_init(taskqueue_ctx *ctx);
 void taskqueue_run(taskqueue_ctx *ctx);
 void taskqueue_schedule(taskqueue_ctx *ctx);
+void drop_task(taskqueue_t *ctx);
 taskqueue_t *post_task(taskqueue_ctx *ctx, time_t timeout, long millisecs, void (*function)(void *), void (*cleanup)(void *),
 		       void *data);
 bool reschedule_task(taskqueue_ctx *ctx, taskqueue_t *task, time_t timeout, long millisecs);

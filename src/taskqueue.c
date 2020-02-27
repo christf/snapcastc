@@ -78,6 +78,7 @@ void drop_task(taskqueue_t *task) {
 		task->cleanup(task->data);
 
 	free(task);
+	task = NULL;
 }
 
 /** Changes the timeout of a task.
