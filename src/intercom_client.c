@@ -8,6 +8,7 @@
 #include "syscallwrappers.h"
 
 extern uint32_t nonce;
+#define REQUEST_RETRY_INTERVAL_MS 100
 
 int receivebuffer_cmp(const void *d1, const void *d2) {
 	pcmChunk *c1 = (pcmChunk *)d1;
@@ -240,7 +241,7 @@ void request_task(void *d) {
 
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len,
 						     snapctx.intercom_ctx.port);
-			post_task(&snapctx.taskqueue_ctx, 0, 100, request_task, free_intercom_task, ndata);
+			post_task(&snapctx.taskqueue_ctx, 0, REQUEST_RETRY_INTERVAL_MS, request_task, free_intercom_task, ndata);
 		} else {
 			log_debug("Could not find request for id %lu - it was most likely already served.\n", req_nonce);
 		}
@@ -267,9 +268,7 @@ void intercom_send_request(intercom_ctx *ctx, audio_packet *mp) {
 	data->packet_len += assemble_request(&data->packet[data->packet_len], mp->nonce);
 	log_debug("assembling request packet for nonce: %lu\n", mp->nonce);
 
-	int interval_ms = 100;
-
-	data->retries_left = snapctx.bufferms / interval_ms;
+	data->retries_left = snapctx.bufferms / REQUEST_RETRY_INTERVAL_MS;
 
 	data->recipient = snap_alloc_aligned(sizeof(struct in6_addr), sizeof(struct in6_addr));
 	memcpy(data->recipient, &ctx->serverip, sizeof(struct in6_addr));
