@@ -69,7 +69,7 @@ bool stream_parse(stream *s, const char *raw) {
 	char *optionctx = NULL;
 	char *valuectx = NULL;
 
-	s->raw = strdup(raw);
+	s->raw = snap_strdup(raw);
 
 	if (!strncmp(raw, "pipe", 4))
 		s->protocol = PIPE;
@@ -80,7 +80,7 @@ bool stream_parse(stream *s, const char *raw) {
 
 	token = strtok_r(strstr(s->raw, PROTOCOL_DELIMITER) + strlen(PROTOCOL_DELIMITER) * sizeof(char), "?", &optionctx);
 
-	s->inputpipe.fname = strdup(token);
+	s->inputpipe.fname = snap_strdup(token);
 
 	log_debug("found input: %s\n", s->inputpipe.fname);
 
@@ -96,7 +96,7 @@ bool stream_parse(stream *s, const char *raw) {
 			else if (!strcmp(token, "codec"))
 				s->codec = parse_codec(value);
 			else if (!strcmp(token, "name"))
-				s->name = strdup(value);
+				s->name = snap_strdup(value);
 			else if (!strcmp(token, "sampleformat")) {
 				valuectx = NULL;
 				value = strtok_r(value, ":", &valuectx);

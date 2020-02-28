@@ -227,9 +227,9 @@ int main(int argc, char *argv[]) {
 	snapctx.alsaplayer_ctx.initialized = false;
 
 	snapctx.bufferms = 1000;
-	snapctx.alsaplayer_ctx.card = strdup("default");
-	snapctx.alsaplayer_ctx.mixer = strdup("Master");
-	snapctx.alsaplayer_ctx.pcm.name = strdup("default");
+	snapctx.alsaplayer_ctx.card = snap_strdup("default");
+	snapctx.alsaplayer_ctx.mixer = snap_strdup("Master");
+	snapctx.alsaplayer_ctx.pcm.name = snap_strdup("default");
 
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
 	snapctx.intercom_ctx.mtu = 1500;  // Do we need to expose this to the user via cli?
@@ -248,15 +248,15 @@ int main(int argc, char *argv[]) {
 				exit(EXIT_SUCCESS);
 			case 'c':
 				free(snapctx.alsaplayer_ctx.card);
-				snapctx.alsaplayer_ctx.card = strdup(optarg);
+				snapctx.alsaplayer_ctx.card = snap_strdup(optarg);
 				break;
 			case 'm':
 				free(snapctx.alsaplayer_ctx.mixer);
-				snapctx.alsaplayer_ctx.mixer = strdup(optarg);
+				snapctx.alsaplayer_ctx.mixer = snap_strdup(optarg);
 				break;
 			case 's':
 				free(snapctx.alsaplayer_ctx.pcm.name);
-				snapctx.alsaplayer_ctx.pcm.name = strdup(optarg);
+				snapctx.alsaplayer_ctx.pcm.name = snap_strdup(optarg);
 				break;
 			case 'l':
 				alsaplayer_pcm_list();
@@ -268,7 +268,7 @@ int main(int argc, char *argv[]) {
 				snapctx.intercom_ctx.nodeid = atol(optarg);
 				break;
 			case 'H':
-				snapctx.servername = strdup(optarg);
+				snapctx.servername = snap_strdup(optarg);
 				obtain_ip_from_name(optarg, &snapctx.intercom_ctx.serverip);
 				break;
 			case 'd':

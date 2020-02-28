@@ -134,7 +134,8 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		chunk_is_in_past = (tdiff.sign > 0 && !is_near && !attempting_start_and_overshot);
 
 		if (chunk_is_in_past && !is_close && !chunk_is_empty(p)) {
-			log_error("we are behind by %s seconds: dropping this chunk!\n", print_timespec(&tdiff.time));
+			log_error("we are behind by %s seconds: dropping chunk that was meant to be played at %s\n", print_timespec(&tdiff.time),
+				  print_timespec(&nextchunk_playat));
 			intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
 			chunk_free_members(p);
 		}
@@ -149,10 +150,10 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		} else {
 			snapctx.alsaplayer_ctx.playing = true;
 			snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
-			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
-					(int)(1.2 * snapctx.bufferms) % 1000);
 			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
 		}
+		reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
+				(int)(1.2 * snapctx.bufferms) % 1000);
 
 		chunk_decode(p);
 
@@ -288,8 +289,7 @@ void alsaplayer_pcm_list() {
 void alsaplayer_remove_task(alsaplayer_ctx *ctx) {
 
 	if (ctx->close_task) {
-		taskqueue_remove(ctx->close_task);
-		free(ctx->close_task);
+		drop_task(ctx->close_task);
 	}
 	ctx->close_task = NULL;
 }
@@ -310,6 +310,9 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 			log_verbose("uninitializing alsa fd %d on index %d\n", ctx->main_poll_fd[i].fd, i);
 			ctx->main_poll_fd[i].fd = -(ctx->main_poll_fd[i]).fd;
 		}
+	if (ctx->close_task)
+		drop_task(ctx->close_task);
+
 	ctx = NULL;
 }
 
@@ -389,8 +392,6 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 		return;
 
 	log_verbose("initializing alsa\n");
-	ctx->close_task = post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms * 1.2) / 1000, (int)(snapctx.bufferms * 1.2) % 1000,
-				    alsaplayer_uninit_task, NULL, ctx);
 
 	int buff_size;
 
@@ -475,6 +476,9 @@ void alsaplayer_init(alsaplayer_ctx *ctx) {
 	log_verbose("start threshold is: %d\n", buffer_size / 2);
 
 	snd_pcm_sw_params(ctx->pcm_handle, ctx->swparams);
+
+	ctx->close_task = post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms * 1.2) / 1000, (int)(snapctx.bufferms * 1.2) % 1000,
+				    alsaplayer_uninit_task, NULL, ctx);
 	ctx->initialized = true;
 }
 

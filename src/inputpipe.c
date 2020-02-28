@@ -47,7 +47,7 @@ bool is_chunk_complete(inputpipe_ctx *ctx) { return (ctx->chunksize == ctx->data
 void set_idle(void *d) {
 	inputpipe_ctx *ctx = (inputpipe_ctx *)d;
 	if (ctx->idle_task)
-		taskqueue_remove(ctx->idle_task);
+		drop_task(ctx->idle_task);
 	log_verbose("INPUT_UNDERRUN... this will be audible.\n");
 	ctx->state = IDLE;
 	ctx->idle_task = NULL;
@@ -59,7 +59,8 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	obtainsystime(&ctime);
 
 	struct timespec bufferfull = timeAddMs(&ctime, snapctx.bufferms * 95 / 100);
-	bool buffer_full = (timespec_cmp(ctx->lastchunk, bufferfull) > 0);
+	struct timespec lastchunk_play_at = chunk_get_play_at(&ctx->chunk);
+	bool buffer_full = (timespec_cmp(lastchunk_play_at, bufferfull) > 0);
 
 	if (buffer_full)
 		return -1;
@@ -72,14 +73,19 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		log_debug("read %d Bytes from inputpipe, data_read: %d chunksize: %d\n", count, ctx->data_read, ctx->chunksize);
 		ctx->state = IDLE;
 	} else if ((count > 0) && (ctx->state == IDLE)) {
-		struct timespec start_playing_at = timeAddMs(&ctime, COLD_START_OFFSET_MS);
+		struct timespec start_playing_at;
+
+		if (timespec_cmp(ctime, chunk_get_play_at(&ctx->chunk)) > 0) {
+			start_playing_at = timeAddMs(&ctime, COLD_START_OFFSET_MS);
+			log_verbose("Detected status change, resyncing timestamps. This will be audible.\n", ctx->state);
+		} else {
+			start_playing_at = timeAddMs(&lastchunk_play_at, ctx->read_ms);
+		}
+
 		ctx->data_read += count;
 		ctx->state = PLAYING;
 		ctx->chunk.play_at_tv_sec = start_playing_at.tv_sec;
 		ctx->chunk.play_at_tv_nsec = start_playing_at.tv_nsec;
-		ctx->lastchunk = chunk_get_play_at(&ctx->chunk);
-
-		log_verbose("Detected status change, resyncing timestamps. This will be audible.\n", ctx->state);
 
 		log_debug("read chunk that is to be played at %s, current time %s\n",
 			  print_timespec(&(struct timespec){.tv_sec = ctx->chunk.play_at_tv_sec, .tv_nsec = ctx->chunk.play_at_tv_nsec}),
@@ -96,9 +102,9 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 
 		if (timespec_cmp(ctime, play_at) > 0) {
 			log_error(
-			    "Either this is the first chunk we read for the first client on an inputstream or We are horribly late when reading from "
-			    "the pipes. Using current timestamp to play back current chunk. If this occurs during playback in contrast to the very "
-			    "beginning, consider adjusting timeout_ms for this stream.\n");
+			    "Either this is the first chunk we read for the first client on an inputstream or we are horribly late when reading from "
+			    "the pipes. Using current timestamp to play back current chunk. This will be audible. If this occurs during playback in "
+			    "contrast to the very beginning, consider adjusting timeout_ms for this stream.\n");
 			play_at = timeAddMs(&ctime, COLD_START_OFFSET_MS);
 		} else {
 			play_at = timeAddMs(&play_at, ctx->read_ms);
@@ -107,7 +113,6 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		timediff t = timeSub(&ctime, &play_at);
 		ctx->chunk.play_at_tv_sec = play_at.tv_sec;
 		ctx->chunk.play_at_tv_nsec = play_at.tv_nsec;
-		ctx->lastchunk = play_at;
 
 		log_verbose("read %lu Bytes of data from %s, last read was %lu, reader state: %s, to be played at %s, current time %s, diff: %c%s\n",
 			    ctx->data_read, ctx->fname, count, print_inputpipe_status(ctx->state), print_timespec(&play_at), print_timespec(&ctime),

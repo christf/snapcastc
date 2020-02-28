@@ -22,12 +22,7 @@ void get_emptychunk(pcmChunk *ret, unsigned int length_ms) {
 }
 
 struct timespec chunk_get_play_at(pcmChunk *chunk) {
-	struct timespec ret = {};
-	if (chunk) {
-		ret.tv_sec = chunk->play_at_tv_sec;
-		ret.tv_nsec = chunk->play_at_tv_nsec;
-	}
-	return ret;
+	return chunk ? (struct timespec){.tv_sec = chunk->play_at_tv_sec, .tv_nsec = chunk->play_at_tv_nsec} : (struct timespec){};
 }
 
 int chunk_getduration_ms(pcmChunk *chunk) {
