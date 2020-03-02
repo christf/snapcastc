@@ -470,7 +470,7 @@ void intercom_uninit(intercom_ctx *ctx) {
 	free(((struct intercom_task*)(ctx->hello_task->data))->packet);
 	free(((struct intercom_task*)(ctx->hello_task->data))->recipient);
 	free(ctx->hello_task->data);
-	drop_task(ctx->hello_task);
+	drop_task(&snapctx.taskqueue_ctx, ctx->hello_task);
 	close(ctx->fd);
 	ctx->lastreceviedseqno = 0;
 

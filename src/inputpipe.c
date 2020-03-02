@@ -47,7 +47,7 @@ bool is_chunk_complete(inputpipe_ctx *ctx) { return (ctx->chunksize == ctx->data
 void set_idle(void *d) {
 	inputpipe_ctx *ctx = (inputpipe_ctx *)d;
 	if (ctx->idle_task)
-		drop_task(ctx->idle_task);
+		drop_task(&snapctx.taskqueue_ctx, ctx->idle_task);
 	log_verbose("INPUT_UNDERRUN... this will be audible.\n");
 	ctx->state = IDLE;
 	ctx->idle_task = NULL;
