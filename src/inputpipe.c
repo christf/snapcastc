@@ -137,6 +137,7 @@ void inputpipe_resume_read(void *d) {
 		}
 		add_fd(snapctx.efd, s->inputpipe.fd, EPOLLIN);
 		s->inputpipe.state = PLAYING;
+		s->inputpipe.resume_task = NULL;
 	}
 }
 
