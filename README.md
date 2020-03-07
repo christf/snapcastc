@@ -163,6 +163,7 @@ And yet in another terminal, start
 ./build/src/snapcast-client -H localhost
 ```
 
+
 ## Status and Roadmap
 
 
@@ -208,7 +209,7 @@ to build and install the program.
 ## Communication Protocol
 
 * clients say hello to servers
-* servers maintain a list of clients that have recently checked in
+* servers maintain a list of clients that have recently said hello
 * when playing data, it is sent to each client using unicast UDP
 * every data packet has a sequence number
 * when a client receives a sequence number n+1 but has not received m it will 

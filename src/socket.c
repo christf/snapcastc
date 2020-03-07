@@ -66,12 +66,12 @@ void jsonrpc_buildresult(json_object *in, int id, json_object *result) {
 
 void client_status(json_object *in) {}
 
-bool group_get_muted() {
+bool group_get_muted(stream *s) {
 	// TODO implement me
 	return false;
 }
 
-const char *group_get_id() {
+const char *group_get_id(stream *s) {
 	// TODO implement me
 	return "2427bc26-e219-8d33-901c-20493f46eb42";
 }
@@ -171,7 +171,7 @@ void json_build_serverstatus_streams(json_object *in) {
 		json_object_object_add(query, "codec", json_object_new_string(print_codec(s->codec)));
 		json_object_object_add(query, "name", json_object_new_string(s->name));  // the object contains s->name a lot
 		char streamformat[20] = {};
-		snprintf(streamformat, 20, "%d:%d:%d", s->inputpipe.samples, s->inputpipe.samplesize * 8, s->inputpipe.channels);
+		snprintf(streamformat, 20, "%zd:%d:%d", s->inputpipe.samples, s->inputpipe.samplesize * 8, s->inputpipe.channels);
 		json_object_object_add(query, "sampleformat", json_object_new_string(streamformat));
 		json_object_object_add(query, "timeout_ms", json_object_new_int(s->inputpipe.pipelength_ms));
 		json_object_object_add(uri, "query", query);

@@ -289,7 +289,7 @@ void alsaplayer_pcm_list() {
 void alsaplayer_remove_task(alsaplayer_ctx *ctx) {
 
 	if (ctx->close_task) {
-		drop_task(ctx->close_task);
+		drop_task(&snapctx.taskqueue_ctx, ctx->close_task);
 	}
 	ctx->close_task = NULL;
 }
@@ -311,7 +311,7 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 			ctx->main_poll_fd[i].fd = -(ctx->main_poll_fd[i]).fd;
 		}
 	if (ctx->close_task)
-		drop_task(ctx->close_task);
+		drop_task(&snapctx.taskqueue_ctx, ctx->close_task);
 
 	ctx = NULL;
 }

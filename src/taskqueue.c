@@ -71,7 +71,7 @@ taskqueue_t *post_task(taskqueue_ctx *ctx, time_t timeout, long millisecs, void 
 	return task;
 }
 
-void drop_task(taskqueue_t *task) {
+void drop_task(taskqueue_ctx *ctx, taskqueue_t *task) {
 	taskqueue_remove(task);
 
 	if (task->cleanup != NULL)
@@ -79,6 +79,7 @@ void drop_task(taskqueue_t *task) {
 
 	free(task);
 	task = NULL;
+	taskqueue_schedule(ctx);
 }
 
 /** Changes the timeout of a task.

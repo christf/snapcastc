@@ -130,6 +130,9 @@ void stream_client_add(stream *s, client_t *c) {
 	if ((VECTOR_LEN(s->clients) == 1) && (s->inputpipe.state == IDLE)) {
 		// TODO: it would be excellent to re-set the timestamps in the buffer allowing playback where we left off if no other client was
 		// active
+		if (s->inputpipe.resume_task)
+			drop_task(&snapctx.taskqueue_ctx, s->inputpipe.resume_task);
+		s->inputpipe.resume_task = NULL;
 		inputpipe_resume_read(s);
 	}
 }
