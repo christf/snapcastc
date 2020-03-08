@@ -43,8 +43,8 @@ void pqueue_delete(PQueue *q) {
 	}
 	log_debug("pqueue delete\n");
 	free(q->data);
-	free(q);
 	q->data = NULL;
+	free(q);
 	q = NULL;
 }
 

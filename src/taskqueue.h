@@ -20,6 +20,7 @@ struct taskqueue {
 	taskqueue_t *children; /**< Heap children */
 
 	struct timespec due; /**< The priority */
+	bool running; /**< Set when task is running to deal with concurrent modification */
 
 	void (*function)(void *);
 	void (*cleanup)(void *);

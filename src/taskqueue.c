@@ -61,6 +61,7 @@ taskqueue_t *post_task(taskqueue_ctx *ctx, time_t timeout, long millisecs, void 
 	task->pprev = NULL;
 
 	task->due = settime(timeout, millisecs);
+	task->running = false;
 
 	task->function = function;
 	task->cleanup = cleanup;
@@ -72,6 +73,10 @@ taskqueue_t *post_task(taskqueue_ctx *ctx, time_t timeout, long millisecs, void 
 }
 
 void drop_task(taskqueue_ctx *ctx, taskqueue_t *task) {
+	if (task->running) {
+		return; // nothing to do, well be cleaned up and freed regulary
+	}
+
 	taskqueue_remove(task);
 
 	if (task->cleanup != NULL)
@@ -131,6 +136,7 @@ void taskqueue_run(taskqueue_ctx *ctx) {
 		taskqueue_t *task = ctx->queue;
 		log_debug("The time is now: %s, running task that was due at %s\n", print_timespec(&now), print_timespec(&task->due));
 		taskqueue_remove(task);
+		task->running = true;
 		task->function(task->data);
 
 		if (task->cleanup)
