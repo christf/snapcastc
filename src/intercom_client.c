@@ -97,17 +97,16 @@ struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx) {
 
 static bool underrun = false;
 
-void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
+bool intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 	pcmChunk *c = pqueue_dequeue(ctx->receivebuffer);
 	if (!c) {
-		if (underrun)
-			log_verbose("BUFFER UNDERRUN\n");
+		bool is_consecutive_underrun = underrun;
+		if (is_consecutive_underrun)
+			log_verbose("NETWORK BUFFER UNDERRUN\n");
 		else
-			log_error("BUFFER UNDERRUN\n");
+			log_error("NETWORK BUFFER UNDERRUN\n");
 
 		underrun = true;
-		if (ret)
-			get_emptychunk(ret, 5);
 	} else {
 		underrun = false;
 		log_verbose("retrieved audio chunk [size: %d, samples: %d, channels: %d, timestamp %zu.%zu]  cached chunks: %zu/%zu\n", c->size,
@@ -117,8 +116,9 @@ void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *ret) {
 		if (ret) {
 			memcpy(ret, c, sizeof(pcmChunk));
 		}
+		free(c);
 	}
-	free(c);
+	return !!c;
 }
 
 bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret) {

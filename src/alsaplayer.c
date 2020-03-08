@@ -136,14 +136,14 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		if (chunk_is_in_past && !is_close && !chunk_is_empty(p)) {
 			log_error("we are behind by %s seconds: dropping chunk that was meant to be played at %s\n", print_timespec(&tdiff.time),
 				  print_timespec(&nextchunk_playat));
-			intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
-			chunk_free_members(p);
+			if (intercom_getnextaudiochunk(&snapctx.intercom_ctx, p))
+				chunk_free_members(p);
 		}
 	} while (chunk_is_in_past && !is_close && !chunk_is_empty(p));
 
 	if (snapctx.alsaplayer_ctx.playing || (attempting_start_and_overshot) || is_near) {
-		intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
-		if (chunk_is_empty(p)) {
+		if (!intercom_getnextaudiochunk(&snapctx.intercom_ctx, p)) {
+			get_emptychunk(p, 50);
 			snapctx.alsaplayer_ctx.empty_chunks_in_row++;
 			if (snapctx.alsaplayer_ctx.empty_chunks_in_row > 5)
 				snapctx.alsaplayer_ctx.playing = false;
