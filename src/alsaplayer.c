@@ -151,14 +151,12 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			snapctx.alsaplayer_ctx.playing = true;
 			snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
 			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
+			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
+					(int)(1.2 * snapctx.bufferms) % 1000);
+			chunk_decode(p);
+			if (!is_near)
+				adjust_speed(p, ts_alsa_ready);
 		}
-		reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
-				(int)(1.2 * snapctx.bufferms) % 1000);
-
-		chunk_decode(p);
-
-		if (!is_near)
-			adjust_speed(p, ts_alsa_ready);
 	} else {
 		int sleep_ms = NOT_EVEN_CLOSE_MS;
 		if (tdiff.sign > 0)
