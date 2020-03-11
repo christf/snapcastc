@@ -315,11 +315,9 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 }
 
 void init_alsafd(alsaplayer_ctx *ctx) {
-	for (int i = 0; i < ctx->pollfd_count; i++) {
-		struct pollfd *pfd = &snapctx.alsaplayer_ctx.ufds[i];
-		ctx->main_poll_fd[i].fd = pfd->fd;
-		ctx->main_poll_fd[i].events = POLLIN;
-		ctx->main_poll_fd[i].revents = 0;
+	int err = 0;
+	if ((err = snd_pcm_poll_descriptors(ctx->pcm_handle, ctx->main_poll_fd, ctx->pollfd_count)) < 0) {
+		exit_error("Unable to obtain ALSA poll descriptors for audio playback: %s\n", snd_strerror(err));
 	}
 }
 
