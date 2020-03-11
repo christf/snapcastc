@@ -93,8 +93,7 @@ void loop() {
 					stream *s = stream_find_fd(events[i].data.fd);
 					if (s) {
 						inputpipe_uninit(&s->inputpipe);
-						inputpipe_init(&s->inputpipe);
-						add_fd(snapctx.efd, s->inputpipe.fd, EPOLLIN);
+						inputpipe_resume_read(&s->inputpipe);
 					}
 				} else if (socket_get_client(&snapctx.socket_ctx, NULL, events[i].data.fd)) {
 					log_error("error received on one of the socket clients. Closing %d\n", events[i].data.fd);
