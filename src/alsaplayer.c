@@ -136,14 +136,14 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		if (chunk_is_in_past && !is_close && !chunk_is_empty(p)) {
 			log_error("we are behind by %s seconds: dropping chunk that was meant to be played at %s\n", print_timespec(&tdiff.time),
 				  print_timespec(&nextchunk_playat));
-			intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
-			chunk_free_members(p);
+			if (intercom_getnextaudiochunk(&snapctx.intercom_ctx, p))
+				chunk_free_members(p);
 		}
 	} while (chunk_is_in_past && !is_close && !chunk_is_empty(p));
 
 	if (snapctx.alsaplayer_ctx.playing || (attempting_start_and_overshot) || is_near) {
-		intercom_getnextaudiochunk(&snapctx.intercom_ctx, p);
-		if (chunk_is_empty(p)) {
+		if (!intercom_getnextaudiochunk(&snapctx.intercom_ctx, p)) {
+			get_emptychunk(p, 50);
 			snapctx.alsaplayer_ctx.empty_chunks_in_row++;
 			if (snapctx.alsaplayer_ctx.empty_chunks_in_row > 5)
 				snapctx.alsaplayer_ctx.playing = false;
@@ -151,14 +151,12 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 			snapctx.alsaplayer_ctx.playing = true;
 			snapctx.alsaplayer_ctx.empty_chunks_in_row = 0;
 			post_task(&snapctx.taskqueue_ctx, 0, 0, decode_first_input, NULL, NULL);
+			reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
+					(int)(1.2 * snapctx.bufferms) % 1000);
+			chunk_decode(p);
+			if (!is_near)
+				adjust_speed(p, ts_alsa_ready);
 		}
-		reschedule_task(&snapctx.taskqueue_ctx, snapctx.alsaplayer_ctx.close_task, (1.2 * snapctx.bufferms) / 1000,
-				(int)(1.2 * snapctx.bufferms) % 1000);
-
-		chunk_decode(p);
-
-		if (!is_near)
-			adjust_speed(p, ts_alsa_ready);
 	} else {
 		int sleep_ms = NOT_EVEN_CLOSE_MS;
 		if (tdiff.sign > 0)
@@ -317,11 +315,9 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 }
 
 void init_alsafd(alsaplayer_ctx *ctx) {
-	for (int i = 0; i < ctx->pollfd_count; i++) {
-		struct pollfd *pfd = &snapctx.alsaplayer_ctx.ufds[i];
-		ctx->main_poll_fd[i].fd = pfd->fd;
-		ctx->main_poll_fd[i].events = POLLIN;
-		ctx->main_poll_fd[i].revents = 0;
+	int err = 0;
+	if ((err = snd_pcm_poll_descriptors(ctx->pcm_handle, ctx->main_poll_fd, ctx->pollfd_count)) < 0) {
+		exit_error("Unable to obtain ALSA poll descriptors for audio playback: %s\n", snd_strerror(err));
 	}
 }
 

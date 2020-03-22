@@ -1,2 +1,2 @@
-SNAPCAST_SERVEROPTS="-s "pipe:///tmp/snapfifo?name=default&codec=opus&sampleformat=48000:16:2&buffer_ms=120" -b 30000 -p 1704"
+SNAPCAST_SERVEROPTS="-b 25000 -s "pipe:///tmp/snapfifo?name=default&codec=opus&sampleformat=48000:16:2&buffer_ms=120" -p 1704"
 SNAPCAST_CLIENTOPTS="-s snapclient -m snapclient -H localhost -p 1704"

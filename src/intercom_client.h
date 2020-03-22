@@ -20,6 +20,6 @@ void intercom_reinit(void *ctx);
 void intercom_init(intercom_ctx *ctx);
 void intercom_uninit(intercom_ctx *ctx);
 struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx);
-void intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *c);
+bool intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *c);
 bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret);
 
