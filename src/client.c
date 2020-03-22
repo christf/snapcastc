@@ -185,16 +185,13 @@ int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
 
 	hints.ai_family = AF_INET6;
 	hints.ai_socktype = SOCK_DGRAM;
-	hints.ai_flags = AI_V4MAPPED;
+	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
 	hints.ai_protocol = 0;
-
-	//	char service[7];
-	//	snprintf(service, 7, "%d", snapctx.intercom_ctx.port);
 
 	s = getaddrinfo(hostname, NULL, &hints, &result);
 	if (s != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
-		exit_error("could not get address for host %s\n", optarg);
+		exit_error("could not get address for host %s\n", hostname);
 	}
 
 	for (rp = result; rp != NULL; rp = rp->ai_next) {
@@ -202,17 +199,13 @@ int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
 		if (sfd == -1)
 			continue;
 
-		if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1) {
-			struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)result->ai_addr;
-			memcpy(&addr->s6_addr, &s6->sin6_addr, sizeof(struct in6_addr));
-			close(sfd);
-			break;
-		}
-
+		struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)result->ai_addr;
+		memcpy(&addr->s6_addr, &s6->sin6_addr, sizeof(struct in6_addr));
 		close(sfd);
+		break;
 	}
 	if (rp == NULL) {
-		exit_error("could not connect to host %s\n", optarg);
+		exit_error("could not connect to host %s\n", hostname);
 	}
 
 	freeaddrinfo(result);

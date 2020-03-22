@@ -460,7 +460,7 @@ void intercom_reinit(void *d) {
 
 	server_addr.sin6_addr = ctx->serverip;
 	if (connect(ctx->fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-		perror("connect socket to server-IP failed");
+		log_error("connect socket to serverIP %s failed: %s\n", print_ip(&server_addr.sin6_addr), strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 	intercom_hello(ctx, &ctx->serverip, ctx->port);
