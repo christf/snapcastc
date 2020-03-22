@@ -114,7 +114,21 @@ void loop() {
 					log_debug("throttling input from fifo, resuming read in %d ms\n", s->inputpipe.read_ms);
 					s->inputpipe.resume_task = post_task(&snapctx.taskqueue_ctx, s->inputpipe.read_ms / 1000, s->inputpipe.read_ms % 1000,
 						  inputpipe_resume_read, NULL, s);
-				} else if (ret == 1) {
+				} else if (ret > 0) {
+					if (ret == 2) {
+						log_error(
+						    "Input stream was reset. Stopping clients and re-initializing playback buffers. This will be "
+						    "audible. A few things might have happened: \n* Playback genuinely just started. In this case "
+						    "there is no negative impact.\n* The input stream was paused and resumed after timeout_ms. If "
+						    "consider adjusting timeout_ms in this case.\n\n"
+						    "timeout_ms should be large enough to compensate for systems busy with io and small enough to be exceeded "
+						    "when the playlist is emptied, and playback resumed with a repopulated playlist.\n"
+						    "timeout_ms is too large, when intentional changes in the playlist with stopping/starting are "
+						    "not properly detected and will lead to audio artifacts for buffer_ms milliseconds.\n"
+						    "timeout_ms is too small, when a server that is busy with a lot of IO will trigger this warning frequently "
+						    "and cause audible glitches.\n");
+						clientmgr_stop_clients(s);
+					}
 					encode_opus_handle(&s->opuscodec_ctx, &s->inputpipe.chunk);
 					intercom_send_audio(&snapctx.intercom_ctx, s);
 					print_packet(s->inputpipe.chunk.data, s->inputpipe.chunk.size);

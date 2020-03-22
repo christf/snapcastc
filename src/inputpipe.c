@@ -98,14 +98,15 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	}
 
 	if (is_chunk_complete(ctx)) {
+		int ret = 1;
 		struct timespec play_at = chunk_get_play_at(&ctx->chunk);
 
 		if (timespec_cmp(ctime, play_at) > 0) {
-			log_error(
+			log_verbose(
 			    "Either this is the first chunk we read for the first client on an inputstream or we are horribly late when reading from "
-			    "the pipes. Using current timestamp to play back current chunk. This will be audible. If this occurs during playback in "
-			    "contrast to the very beginning, consider adjusting timeout_ms for this stream.\n");
+			    "the pipes. Using current timestamp to play back current chunk.");
 			play_at = timeAddMs(&ctime, COLD_START_OFFSET_MS);
+			ret = 2;
 		} else {
 			play_at = timeAddMs(&play_at, ctx->read_ms);
 		}
@@ -123,7 +124,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		ctx->chunk.channels = ctx->channels;
 		ctx->chunk.codec = CODEC_PCM;
 		ctx->data_read = 0;
-		return 1;
+		return ret;
 	}
 	return 0;
 }
