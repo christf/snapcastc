@@ -301,6 +301,7 @@ bool handle_client_setstream(jsonrpc_request *request, int fd) {
 	jsonrpc_buildresult(response, request->id, result);
 	json_object_print_and_put(fd, response);
 	free(target_stream_id);
+	return true;
 }
 
 bool handle_client_setvolume(jsonrpc_request *request, int fd) {
