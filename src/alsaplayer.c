@@ -298,7 +298,9 @@ void alsaplayer_uninit(alsaplayer_ctx *ctx) {
 
 	snd_pcm_nonblock(ctx->pcm_handle, 0);
 	snd_pcm_drain(ctx->pcm_handle);
+	snd_pcm_hw_free(ctx->pcm_handle);
 	snd_pcm_close(ctx->pcm_handle);
+	snd_config_update_free_global();
 	ctx->initialized = ctx->playing = false;
 	free(ctx->ufds);
 	free(ctx->params);
@@ -322,16 +324,15 @@ void init_alsafd(alsaplayer_ctx *ctx) {
 }
 
 void mixer_init(alsaplayer_ctx *ctx) {
-	snd_mixer_selem_id_t *sid = NULL;
 	snd_mixer_open(&ctx->mixer_handle, 0);  // mode is unused => setting 0
 	snd_mixer_attach(ctx->mixer_handle, ctx->card);
 	snd_mixer_selem_register(ctx->mixer_handle, NULL, NULL);
 	snd_mixer_load(ctx->mixer_handle);
 
-	snd_mixer_selem_id_alloca(&sid);
-	snd_mixer_selem_id_set_index(sid, 0);
-	snd_mixer_selem_id_set_name(sid, ctx->mixer);
-	ctx->mixer_elem = snd_mixer_find_selem(ctx->mixer_handle, sid);
+	snd_mixer_selem_id_malloc(&ctx->sid);
+	snd_mixer_selem_id_set_index(ctx->sid, 0);
+	snd_mixer_selem_id_set_name(ctx->sid, ctx->mixer);
+	ctx->mixer_elem = snd_mixer_find_selem(ctx->mixer_handle, ctx->sid);
 
 	if (ctx->mixer_elem)
 		snd_mixer_selem_get_playback_volume_range(ctx->mixer_elem, &ctx->mixer_min, &ctx->mixer_max);
@@ -341,10 +342,16 @@ void mixer_init(alsaplayer_ctx *ctx) {
 		log_error("could not initialize mixer %s. Continuing with bogus volume values. You will not be able to control the volume\n.",
 			  ctx->mixer);
 	}
+
 }
 
 void mixer_uninit(alsaplayer_ctx *ctx) {
+	snd_mixer_selem_id_free(ctx->sid);
+	snd_mixer_free(ctx->mixer_handle);
+	snd_mixer_detach(ctx->mixer_handle, ctx->card);
 	snd_mixer_close(ctx->mixer_handle);
+	ctx->sid = NULL;
+	ctx->mixer_elem = NULL;
 	ctx->mixer_handle = NULL;
 }
 

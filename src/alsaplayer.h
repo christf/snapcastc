@@ -59,6 +59,7 @@ typedef struct {
 
 	snd_mixer_t *mixer_handle;
 	snd_mixer_elem_t *mixer_elem;
+	snd_mixer_selem_id_t *sid;
 
 	int pollfd_count;
 	struct pollfd *ufds;
