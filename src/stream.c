@@ -36,11 +36,8 @@ int parse_codec(const char *codec) {
 stream *stream_find(const client_t *client) {
 	for (int s = 0; s < VECTOR_LEN(snapctx.streams); s++) {
 		stream *stream = &VECTOR_INDEX(snapctx.streams, s);
-		for (int i = 0; i < VECTOR_LEN(stream->clients); i++) {
-			client_t *sc = &VECTOR_INDEX(stream->clients, i);
-			if (!client_cmp(client, sc))
-				return stream;
-		}
+		if (get_client(stream, client->id))
+			return stream;
 	}
 	return NULL;
 }
