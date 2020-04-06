@@ -98,6 +98,7 @@ void loop() {
 	// Alsa will be initialized when first packets arrive.
 	for (int i = 0; i < fd_index; i++) {
 		fds[i].fd = -1;
+		fds[i].events = POLLIN;
 	}
 
 	fds[fd_index].fd = snapctx.taskqueue_ctx.fd;
