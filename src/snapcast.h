@@ -41,7 +41,7 @@ struct snapctx {
 	intercom_ctx intercom_ctx;
 	socket_ctx socket_ctx;
 
-	VECTOR(stream) streams;
+	stream_vector streams;
 
 	int efd;
 	uint16_t bufferms;
