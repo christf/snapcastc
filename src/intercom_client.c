@@ -447,8 +447,43 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 	}
 }
 
+int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
+	struct addrinfo hints = {};
+	struct addrinfo *result = NULL, *rp;
+	int s, sfd;
+
+	hints.ai_family = AF_INET6;
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+	hints.ai_protocol = 0;
+
+	s = getaddrinfo(hostname, NULL, &hints, &result);
+	if (s != 0) {
+		exit_errno("getaddrinfo: could not resolve host %s, getaddrinfo failed", hostname);
+	}
+
+	for (rp = result; rp != NULL; rp = rp->ai_next) {
+		sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if (sfd == -1)
+			continue;
+
+		struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)result->ai_addr;
+		memcpy(&addr->s6_addr, &s6->sin6_addr, sizeof(struct in6_addr));
+		close(sfd);
+		break;
+	}
+	if (rp == NULL) {
+		exit_error("could not connect to host %s\n", hostname);
+	}
+
+	freeaddrinfo(result);
+	return 0;
+}
+
+
 void intercom_reinit(void *d) {
 	intercom_ctx *ctx = (intercom_ctx*) d;
+	obtain_ip_from_name(snapctx.servername, &ctx->serverip);
 
 	ctx->fd = socket(PF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0);
 	if (ctx->fd < 0)
@@ -460,7 +495,7 @@ void intercom_reinit(void *d) {
 
 	server_addr.sin6_addr = ctx->serverip;
 	if (connect(ctx->fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-		perror("connect socket to server-IP failed");
+		log_error("connect socket to serverIP %s failed: %s\n", print_ip(&server_addr.sin6_addr), strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 	intercom_hello(ctx, &ctx->serverip, ctx->port);

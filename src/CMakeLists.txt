@@ -25,8 +25,8 @@ target_link_libraries(snapcast-test ${ALSA_LIBRARIES})
 target_link_libraries(snapcast-client ${JSON_C_LIBRARIES})
 target_link_libraries(snapcast-client ${ALSA_LIBRARIES})
 
-set_target_properties(snapcast-client PROPERTIES COMPILE_FLAGS "-std=gnu11 -fsanitize=address -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm -fsanitize=address")
-set_target_properties(snapcast-server PROPERTIES COMPILE_FLAGS "-std=gnu11 -fsanitize=address  -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm -fsanitize=address")
+set_target_properties(snapcast-client PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm")
+set_target_properties(snapcast-server PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm")
 set_target_properties(snapcast-test PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm")
 
 install(TARGETS snapcast-client RUNTIME DESTINATION bin)

@@ -65,21 +65,13 @@ void add_fd(int efd, int fd, uint32_t events) {
 	event.data.fd = fd;
 	event.events = events;
 
-	int s = epoll_ctl(efd, EPOLL_CTL_ADD, fd, &event);
-	if (s == -1) {
-		log_error("error on add_fd %d on efd %d\n", fd, efd);
-		perror("epoll_ctl (ADD):");
-		exit_error("epoll_ctl");
-	}
+	if (epoll_ctl(efd, EPOLL_CTL_ADD, fd, &event) == -1)
+		exit_errno("error on add_fd %d on efd %d, epoll_ctl (ADD)", fd, efd);
 }
 
 void del_fd(int efd, int fd) {
-	int s = epoll_ctl(efd, EPOLL_CTL_DEL, fd, NULL);
-	if (s == -1) {
-		perror("epoll_ctl");
-		log_error("error on del_fd %d on efd %d\n", fd, efd);
-		exit_errno("epoll_ctl (DEL):");
-	}
+	if (epoll_ctl(efd, EPOLL_CTL_DEL, fd, NULL)  == -1)
+		exit_errno("error on del_fd %d on efd %d, epoll_ctl(DEL)", fd, efd);
 }
 
 const char *print_mac(const uint8_t mac[6]) {

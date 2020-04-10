@@ -92,7 +92,7 @@ void _snap_vector_delete(snap_vector_desc_t *desc, void **data, size_t pos, size
 
    \hideinitializer
 */
-#define VECTOR_GETINDEX(v, elem) ({ (elem - v.data) / sizeof(*elem); })
+#define VECTOR_GETINDEX(v, elem) ({ (elem - v.data);})
 
 /**
    Returns a pointer to the vector elements of \e v

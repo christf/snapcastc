@@ -98,6 +98,7 @@ void loop() {
 	// Alsa will be initialized when first packets arrive.
 	for (int i = 0; i < fd_index; i++) {
 		fds[i].fd = -1;
+		fds[i].events = POLLIN;
 	}
 
 	fds[fd_index].fd = snapctx.taskqueue_ctx.fd;
@@ -178,47 +179,6 @@ void catch_sigterm() {
 	sigaction(SIGTERM, &_sigact, NULL);
 }
 
-int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
-	struct addrinfo hints = {};
-	struct addrinfo *result = NULL, *rp;
-	int s, sfd;
-
-	hints.ai_family = AF_INET6;
-	hints.ai_socktype = SOCK_DGRAM;
-	hints.ai_flags = AI_V4MAPPED;
-	hints.ai_protocol = 0;
-
-	//	char service[7];
-	//	snprintf(service, 7, "%d", snapctx.intercom_ctx.port);
-
-	s = getaddrinfo(hostname, NULL, &hints, &result);
-	if (s != 0) {
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
-		exit_error("could not get address for host %s\n", optarg);
-	}
-
-	for (rp = result; rp != NULL; rp = rp->ai_next) {
-		sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-		if (sfd == -1)
-			continue;
-
-		if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1) {
-			struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)result->ai_addr;
-			memcpy(&addr->s6_addr, &s6->sin6_addr, sizeof(struct in6_addr));
-			close(sfd);
-			break;
-		}
-
-		close(sfd);
-	}
-	if (rp == NULL) {
-		exit_error("could not connect to host %s\n", optarg);
-	}
-
-	freeaddrinfo(result);
-	return 0;
-}
-
 int main(int argc, char *argv[]) {
 	snapctx.verbose = false;
 	snapctx.debug = false;
@@ -269,7 +229,6 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'H':
 				snapctx.servername = snap_strdup(optarg);
-				obtain_ip_from_name(optarg, &snapctx.intercom_ctx.serverip);
 				break;
 			case 'd':
 				snapctx.debug = true;

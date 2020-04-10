@@ -35,6 +35,8 @@ typedef struct {
 	bool initialized;
 } stream;
 
+typedef VECTOR(stream) stream_vector;
+
 stream *stream_find(const client_t *client);
 stream *stream_find_fd(int fd);
 stream *stream_find_name(const char *name);

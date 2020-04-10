@@ -97,6 +97,7 @@ void delete_client_internal(stream *s, client_t *c) {
 	if (c && s) {
 		log_verbose("\033[34mREMOVING client %lu, %d clients left in stream.\033[0m\n", c->id, VECTOR_LEN(s->clients) - 1);
 		print_client(c);
+		drop_task(&snapctx.taskqueue_ctx, c->purge_task);
 		stream_client_remove(s, c);
 	} else {
 		log_error("Client [%lu] unknown: cannot delete\n", c ? c->id : 0);
@@ -159,7 +160,12 @@ bool clientmgr_refresh_client(struct client *client) {
 	struct timespec ctime;
 	obtainsystime(&ctime);
 
-	if (!existingclient) {
+	if (!existingclient || (existingclient && client->port != existingclient->port)) {
+		if (existingclient && client->port != existingclient->port) {
+			// assuming we are now dealing with a new client instance, removing the old records and create a new client.
+			clientmgr_delete_client(client->id);
+		}
+
 		// create new client
 		log_verbose("clientmgr: creating client: %lu\n", client->id);
 		client_t n_client = {};
@@ -184,6 +190,9 @@ bool clientmgr_refresh_client(struct client *client) {
 		existingclient->mac[0] = 0xff;
 		existingclient->mac[1] = 0xff;
 		memcpy(&existingclient->mac[2], &client->id, 4);
+	} else {
+		log_verbose("Refreshing client: %lu\n", client->id);
+		reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);
 	}
 
 	existingclient->connected = true;
@@ -195,12 +204,6 @@ bool clientmgr_refresh_client(struct client *client) {
 		clientmgr_client_refreshvolume(existingclient, existingclient->volume_percent);
 	}
 
-	// It might be a different client instance, if the port changed. Let's let the old instance time out
-	if (client->port == existingclient->port) {
-		log_verbose("clientmgr: refreshing client: %lu\n", client->id);
-		print_client(existingclient);
-		reschedule_task(&snapctx.taskqueue_ctx, existingclient->purge_task, 5, 0);
-	}
 
 	return true;
 }

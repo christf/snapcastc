@@ -30,12 +30,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-static inline void _exit_error(int status, int errnum, const char *format, ...) {
-	va_list ap;
-	va_start(ap, format);
-	vfprintf(stderr, format, ap);
-	va_end(ap);
-
+static void _exit_error(int status, int errnum, const char *format, va_list *args) {
+	vfprintf(stderr, format, *args);
 	if (errnum)
 		fprintf(stderr, ": %s\n", strerror(errnum));
 	else
@@ -48,20 +44,20 @@ static inline void _exit_error(int status, int errnum, const char *format, ...) 
 static inline void exit_errno(const char *format, ...) {
 	va_list ap;
 	va_start(ap, format);
-	_exit_error(1, errno, format, ap);
+	_exit_error(1, errno, format, &ap);
 	va_end(ap);
 }
 
 static inline void exit_error(const char *format, ...) {
 	va_list ap;
 	va_start(ap, format);
-	_exit_error(1, 0, format, ap);
+	_exit_error(1, 0, format, &ap);
 	va_end(ap);
 }
 
 static inline void exit_bug(const char *format, ...) {
 	va_list ap;
 	va_start(ap, format);
-	_exit_error(-1, 0, format, ap);
+	_exit_error(-1, 0, format, &ap);
 	va_end(ap);
 }
