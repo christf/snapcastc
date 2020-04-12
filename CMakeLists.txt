@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(snapcast C)
 
+option(WITH_ASAN "Enable ASAN (address sanitizer)" OFF)
+
 find_path(JSON_C_INCLUDE_DIR NAMES json-c/json.h HINTS ${_JSON_C_INCLUDE_DIRS})
 find_library(JSON_C_LIBRARIES NAMES json-c HINTS ${_JSON_C_LIBRARY_DIRS})
 
@@ -19,6 +21,11 @@ endif(ALSA_FOUND)
 
 # find_package_handle_standard_args(JSON_C REQUIRED_VARS JSON_C_LIBRARIES JSON_C_INCLUDE_DIR)
 # mark_as_advanced(JSON_C_INCLUDE_DIR JSON_C_LIBRARIES JSON_C_CFLAGS_OTHER JSON_C_LDFLAGS_OTHER)
+
+if (WITH_ASAN)
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+endif (WITH_SANITIZER)
 
 set(CMAKE_MODULE_PATH ${snapcastc_SOURCE_DIR})
 
