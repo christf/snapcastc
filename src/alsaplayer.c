@@ -293,8 +293,10 @@ void alsaplayer_remove_task(alsaplayer_ctx *ctx) {
 }
 
 void alsaplayer_uninit(alsaplayer_ctx *ctx) {
-	if (!ctx->initialized)
+	if (!ctx->initialized) {
+		snd_config_update_free_global();
 		return;
+	}
 
 	snd_pcm_nonblock(ctx->pcm_handle, 0);
 	snd_pcm_drain(ctx->pcm_handle);
