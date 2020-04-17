@@ -190,11 +190,11 @@ Of course, this can be used to build SnapCastC on your own infrastructure.
 
 ### Dependencies
 
-    apt install libasound2 libopus libjson-c3 librubberband2
+    apt install libasound2 libopus libsoxr0 libjson-c3 librubberband2
     
 ### Build
 
-    apt install librubberband-dev libasound2-dev libopus-dev build-essential git libjson-c-dev
+    apt install cmake libsoxr-dev librubberband-dev libasound2-dev libopus-dev build-essential git libjson-c-dev
 
 in the root of this project, run:
 ```
