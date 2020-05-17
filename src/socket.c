@@ -147,7 +147,7 @@ void json_add_groups(json_object *out) {
 }
 
 void json_build_serverstatus_streams(json_object *in) {
-	// "raw": "pipe:////tmp/snapfifo?buffer_ms=20&codec=pcm&name=default&sampleformat=48000:16:2&timeout_ms=1000",
+	// "raw": "pipe:////tmp/snapfifo?buffer_ms=20&codec=pcm&name=default&sampleformat=48000:16:2",
 	json_object *streams = json_object_new_array();
 
 	for (int i = VECTOR_LEN(snapctx.streams) - 1; i >= 0; --i) {
@@ -173,7 +173,6 @@ void json_build_serverstatus_streams(json_object *in) {
 		char streamformat[20] = {};
 		snprintf(streamformat, 20, "%zd:%d:%d", s->inputpipe.samples, s->inputpipe.samplesize * 8, s->inputpipe.channels);
 		json_object_object_add(query, "sampleformat", json_object_new_string(streamformat));
-		json_object_object_add(query, "timeout_ms", json_object_new_int(s->inputpipe.pipelength_ms));
 		json_object_object_add(uri, "query", query);
 
 		json_object_object_add(uri, "raw", json_object_new_string(s->raw));

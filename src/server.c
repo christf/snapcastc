@@ -27,6 +27,7 @@
 #include "alloc.h"
 #include "error.h"
 #include "inputpipe.h"
+#include "intercom_srv.h"
 #include "opuscodec.h"
 #include "snapcast.h"
 #include "socket.h"
@@ -35,7 +36,6 @@
 #include "util.h"
 #include "vector.h"
 #include "version.h"
-#include "intercom_srv.h"
 
 #define SIGTERM_MSG "Exiting.\n"
 
@@ -112,26 +112,22 @@ void loop() {
 					del_fd(snapctx.efd, events[i].data.fd);
 					s->inputpipe.state = THROTTLE;
 					log_debug("throttling input from fifo, resuming read in %d ms\n", s->inputpipe.read_ms);
-					s->inputpipe.resume_task = post_task(&snapctx.taskqueue_ctx, s->inputpipe.read_ms / 1000, s->inputpipe.read_ms % 1000,
-						  inputpipe_resume_read, NULL, s);
+					s->inputpipe.resume_task = post_task(&snapctx.taskqueue_ctx, s->inputpipe.read_ms / 1000,
+									     s->inputpipe.read_ms % 1000, inputpipe_resume_read, NULL, s);
 				} else if (ret > 0) {
 					if (ret == 2) {
 						log_error(
-						    "Input stream was reset. Stopping clients and re-initializing playback buffers. This will be "
-						    "audible. A few things might have happened: \n* Playback genuinely just started. In this case "
-						    "there is no negative impact.\n* The input stream was paused and resumed after timeout_ms. If "
-						    "consider adjusting timeout_ms in this case.\n\n"
-						    "timeout_ms should be large enough to compensate for systems busy with io and small enough to be exceeded "
-						    "when the playlist is emptied, and playback resumed with a repopulated playlist.\n"
-						    "timeout_ms is too large, when intentional changes in the playlist with stopping/starting are "
-						    "not properly detected and will lead to audio artifacts for buffer_ms milliseconds.\n"
-						    "timeout_ms is too small, when a server that is busy with a lot of IO will trigger this warning frequently "
-						    "and cause audible glitches.\n");
+						    "Input stream was reset. Stopping clients and re-initializing "
+						    "playback buffers. This will be "
+						    "audible. A few things might have happened: \n* Playback "
+						    "genuinely just started. In this case "
+						    "there is no negative impact.\n* The input stream was paused "
+						    "and resumed.\n* The server is too slow to cope\n");
 						clientmgr_stop_clients(s);
 					}
 					encode_opus_handle(&s->opuscodec_ctx, &s->inputpipe.chunk);
 					intercom_send_audio(&snapctx.intercom_ctx, s);
-					print_packet(s->inputpipe.chunk.data, s->inputpipe.chunk.size);
+					// print_packet(s->inputpipe.chunk.data, s->inputpipe.chunk.size);
 				}
 			} else if ((snapctx.intercom_ctx.fd == events[i].data.fd) && (events[i].events & EPOLLIN)) {
 				intercom_handle_in(&snapctx.intercom_ctx, events[i].data.fd);
@@ -160,12 +156,16 @@ void loop() {
 					else if (tmp == 0) {  // EOF. Close silently
 						log_error("just read EOF on fd %d\n", events[i].data.fd);
 					} else {
-						log_error("  WE JUST READ %i Byte from unknown socket %i or with unknown event with content %s\n",
-							  tmp, events[i].data.fd, buffer);
+						log_error(
+						    "  WE JUST READ %i Byte from unknown socket %i or with "
+						    "unknown event with content %s\n",
+						    tmp, events[i].data.fd, buffer);
 					}
 					break;
 				}
-				log_error("event is not EPOLLIN but still from an unknown fd. - This likely is a bug.\n");
+				log_error(
+				    "event is not EPOLLIN but still from an unknown fd. - This "
+				    "likely is a bug.\n");
 			}
 			log_debug("handled event on fd %d - Event %d out of %d\n", events[i].data.fd, i + 1, n);
 			events[i].events = 0;  // clear events for next iteration
@@ -179,7 +179,9 @@ void usage() {
 	// TODO: write complete help message
 	puts("snapcast-server -b bufferMs -s <inputpipe>\n");
 	puts("b	<num>		buffer <num> Ms of audio data");
-	puts("			order is important. -b must be specified before the streams.");
+	puts(
+	    "			order is important. -b must be specified "
+	    "before the streams.");
 	puts("v			be verbose");
 	puts("d			debug loglevel");
 	puts("s	<stream>	specify stream");
@@ -187,7 +189,11 @@ void usage() {
 	puts("P <port>		listen on control port <port>");
 	puts("V			show version");
 	puts("");
-	puts("example: snapcast-server -b 10000 -s 'pipe:///tmp/snapcast?buffer_ms=120&name=default&sampleformat=48000:16:2&timeout_ms=1000&codec=opus' -s 'pipe:///tmp/snapcast1?buffer_ms=120&name=rammstein&sampleformat=48000:16:2&timeout_ms=1000&codec=opus' -p 1704 -v");
+	puts(
+	    "example: snapcast-server -b 10000 "
+	    "-s 'pipe:///tmp/snapcast?buffer_ms=120&name=default&sampleformat=48000:16:2&codec=opus'"
+		"-s 'pipe:///tmp/snapcast1?buffer_ms=120&name=rammstein&sampleformat=48000:16:2&codec=opus'"
+		"-p 1704 -v");
 }
 
 void catch_sigterm() {

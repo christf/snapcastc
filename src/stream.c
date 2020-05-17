@@ -102,8 +102,7 @@ bool stream_parse(stream *s, const char *raw) {
 				s->inputpipe.samplesize = atol(value) / 8;
 				value = strtok_r(NULL, ":", &valuectx);
 				s->inputpipe.channels = atol(value);
-			} else if (!strcmp(token, "timeout_ms"))
-				s->inputpipe.pipelength_ms = atoi(value);
+			}
 			else {
 				log_error("unknown option - bailing out\n");
 				return false;

@@ -105,7 +105,7 @@ Options marked with (*) are not implemented yet.
 
 I am starting snapserver like this:
 ```
-snapcast-server -b 25000 -s "pipe:///tmp/snapfifo?buffer_ms=120&codec=opus&name=default&sampleformat=48000:16:2&timeout_ms=10000" -p 1704
+snapcast-server -b 25000 -s "pipe:///tmp/snapfifo?buffer_ms=120&codec=opus&name=default&sampleformat=48000:16:2" -p 1704
 ```
 
 ### Client

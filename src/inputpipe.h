@@ -46,7 +46,6 @@ typedef struct {
 	int fd;
 
 	uint16_t chunksize;
-	uint32_t pipelength_ms;
 	bool initialized;
 	taskqueue_t *resume_task;
 	taskqueue_t *idle_task;
