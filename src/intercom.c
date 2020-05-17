@@ -5,7 +5,7 @@
 #include "util.h"
 
 uint32_t nonce = 0;
-uint32_t get_nonce(uint32_t *nonce) { return htonl(((*nonce)++ % NONCE_MAX)); }
+uint32_t get_nonce(uint32_t *nonce) { return nonce ? htonl(((*nonce)++ % NONCE_MAX)) : htonl(0); }
 
 int cmp_audiopacket(const audio_packet *ap1, const audio_packet *ap2) {
 	if (ap1->nonce > ap2->nonce)

@@ -1,10 +1,10 @@
-#include "alloc.h"
-#include "snapcast.h"
-#include "intercom_common.h"
-#include "util.h"
-#include "timespec.h"
-#include "syscallwrappers.h"
 #include <error.h>
+#include "alloc.h"
+#include "intercom_common.h"
+#include "snapcast.h"
+#include "syscallwrappers.h"
+#include "timespec.h"
+#include "util.h"
 
 extern uint32_t nonce;
 
@@ -17,11 +17,12 @@ int parse_request(uint8_t *packet, uint32_t *nonce) {
 
 int parse_hello(uint8_t *packet, client_t *client) {
 	uint32_t tmp;
-	memcpy(&tmp, &packet[2], sizeof(uint32_t));
-	client->id = ntohl(tmp);
-	memcpy(&tmp, &packet[6], sizeof(uint32_t));
+	uint16_t s_tmp;
+	memcpy(&s_tmp, &packet[2], sizeof(uint16_t));
+	client->id = ntohs(s_tmp);
+	memcpy(&tmp, &packet[4], sizeof(uint32_t));
 	client->latency = ntohl(tmp);
-	client->volume_percent = packet[10];
+	client->volume_percent = packet[8];
 	return packet[1];
 }
 
@@ -69,15 +70,14 @@ void remove_old_audiodata_task(void *data) {
 	} while (VECTOR_LEN(s->packet_buffer) && timespec_cmp(age, play_at) > 0);
 }
 
-
-int assemble_volume(uint8_t *packet, uint32_t nonce, uint8_t volume) {
+int assemble_volume(uint8_t *packet, uint8_t volume) {
 	packet[0] = CLIENT_VOLUME;
 	packet[1] = 3;
 	packet[2] = volume;
 	return packet[1];
 }
 
-int assemble_stop(uint8_t *packet, uint32_t nonce) {
+int assemble_stop(uint8_t *packet) {
 	packet[0] = CLIENT_STOP;
 	packet[1] = 2;
 	return packet[1];
@@ -88,8 +88,8 @@ bool intercom_set_volume(intercom_ctx *ctx, const client_t *client, uint8_t volu
 	uint8_t packet[sizeof(intercom_packet_op) + sizeof(tlv_op) + sizeof(volume)];
 
 	stream *s = stream_find(client);
-	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION, &s->nonce, 0);
-	packet_len += assemble_volume(&packet[packet_len], get_nonce(&s->nonce), volume);
+	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION, NULL, 0);
+	packet_len += assemble_volume(&packet[packet_len], volume);
 
 	return intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, packet, packet_len, client->port);
 }
@@ -99,17 +99,16 @@ bool intercom_stop_client(intercom_ctx *ctx, const client_t *client) {
 	uint8_t packet[sizeof(intercom_packet_op) + sizeof(tlv_op)];
 
 	stream *s = stream_find(client);
-	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION, &s->nonce, 0);
-	packet_len += assemble_stop(&packet[packet_len], get_nonce(&s->nonce));
+	packet_len = assemble_header(&((intercom_packet_op *)packet)->hdr, SERVER_OPERATION, NULL, 0);
+	packet_len += assemble_stop(&packet[packet_len]);
 
 	return intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, packet, packet_len, client->port);
 }
 
 /** send chunk to all clients that are currently active
-*/
+ */
 void intercom_send_audio(intercom_ctx *ctx, stream *s) {
 	pcmChunk *chunk = &(s->inputpipe.chunk);
-	log_debug("sending %d Bytes of audio data\n", chunk->size);
 	uint8_t packet[sizeof(intercom_packet_audio) + CHUNK_HEADER_SIZE + chunk->size];
 
 	ssize_t packet_len;
@@ -136,6 +135,8 @@ void intercom_send_audio(intercom_ctx *ctx, stream *s) {
 	ap.nonce = ntohl(((intercom_packet_audio *)packet)->hdr.nonce);
 	VECTOR_ADD(s->packet_buffer, ap);
 
+	log_debug("sending audio packet %zu with %d Bytes data\n", ap.nonce, chunk->size);
+
 	// since we always write into this vector in ascending order, we can always remove the very first item on timeout and thus do not have
 	// to pass the information which packet to remove
 	post_task(&snapctx.taskqueue_ctx, (snapctx.bufferms / 1000), snapctx.bufferms % 1000, remove_old_audiodata_task, NULL, s);
@@ -146,7 +147,6 @@ void intercom_send_audio(intercom_ctx *ctx, stream *s) {
 			intercom_send_packet_unicast(&snapctx.intercom_ctx, &c->ip, packet, packet_len, c->port);
 	}
 }
-
 
 bool intercom_handle_client_operation(intercom_ctx *ctx, intercom_packet_op *packet, int packet_len, struct in6_addr *peer, uint16_t port) {
 	/*
@@ -174,19 +174,27 @@ bool intercom_handle_client_operation(intercom_ctx *ctx, intercom_packet_op *pac
 			case REQUEST:;
 				stream *s = find_client(ntohs(packet->hdr.clientid)).stream;
 				currentoffset += parse_request(packetpointer, &nonce);
+				log_verbose("RECEIVED REQUEST for packet %zu from %zu\n", nonce, ntohs(packet->hdr.clientid));
 				if (s) {
+					log_verbose("handling request - found stream\n");
 					audio_packet key = {.nonce = nonce};
 					audio_packet *ap = VECTOR_LSEARCH(&key, s->packet_buffer, cmp_audiopacket);
 					if (ap) {
 						intercom_send_packet_unicast(ctx, peer, ap->data, ap->len, port);
-						log_error("re-sent packet %lu to client %d\n", nonce, ntohs(packet->hdr.clientid));
+						log_error("re-sent packet %lu to client %zu\n", nonce, ntohs(packet->hdr.clientid));
 					} else {
-						log_error("ERROR: could not satisfy request to re-send packet %lu to client %u\n", nonce, ntohs(packet->hdr.clientid));
+						log_error("ERROR: could not satisfy request to re-send packet %lu to client %zu\n", nonce,
+							  ntohs(packet->hdr.clientid));
 					}
+				} 
+				else {
+					log_error("RECEIVED REQUEST FROM CLIENT THAT COULDN'T BE ASSIGNED TO STREAM. THIS IS A BUG.\n");
 				}
 				break;
 			default:
 				log_error("unknown segment of type %i found in client operation packet. Ignoring this piece\n", type);
+				print_packet((uint8_t*)packet, 15);
+				currentoffset += packetpointer[2];
 				break;
 		}
 	}
@@ -209,9 +217,8 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 	}
 }
 
-
 void intercom_init(intercom_ctx *ctx) {
-	obtainrandom(&nonce, sizeof(uint32_t), 0);
+	nonce = 1;
 	ctx->receivebuffer = NULL;
 
 	VECTOR_INIT(ctx->recent_packets);
@@ -222,7 +229,8 @@ void intercom_init(intercom_ctx *ctx) {
 		exit_error("creating socket for intercom on node-IP");
 
 	struct sockaddr_in6 server_addr = {
-	    .sin6_family = AF_INET6, .sin6_port = htons(ctx->port),
+	    .sin6_family = AF_INET6,
+	    .sin6_port = htons(ctx->port),
 	};
 
 	if (bind(ctx->fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
@@ -230,4 +238,3 @@ void intercom_init(intercom_ctx *ctx) {
 		exit(EXIT_FAILURE);
 	}
 }
-

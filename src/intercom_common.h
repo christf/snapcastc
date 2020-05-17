@@ -16,10 +16,10 @@
 #define PACKET_FORMAT_VERSION 1
 #define CLIENTNAME_MAXLEN
 #define INTERCOM_MAX_RECENT 1000
-#define NONCE_MAX 4294967294
+#define NONCE_MAX 0xFFFFFFFF
 
 enum { CLIENT_OPERATION, AUDIO_DATA, SERVER_OPERATION };  // Packet types
-enum { REQUEST, HELLO };				  // TLV types client op
+	enum { REQUEST, HELLO };				  // TLV types client op
 enum { AUDIO,
        AUDIO_PCM,
        AUDIO_OPUS,
@@ -48,7 +48,7 @@ typedef struct __attribute__((__packed__)) {
 typedef struct __attribute__((__packed__)) {
 	uint8_t type;
 	uint8_t length;
-	uint32_t node_id;
+	uint16_t node_id;
 	uint32_t latency;
 	uint8_t volume;
 } tlv_hello;
@@ -81,7 +81,7 @@ typedef struct {
 	int fd;
 	uint16_t port;
 	uint16_t controlport;
-	uint32_t nodeid;
+	uint16_t nodeid;
 	int mtu;
 	int buffer_wraparound;
 

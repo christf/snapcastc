@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
 
 	snapctx.intercom_ctx.port = INTERCOM_PORT;
 	snapctx.intercom_ctx.mtu = 1500;  // Do we need to expose this to the user via cli?
-	obtainrandom(&snapctx.intercom_ctx.nodeid, sizeof(uint32_t), 0);
+	obtainrandom(&snapctx.intercom_ctx.nodeid, sizeof(uint16_t), 0);
 
 	int option_index = 0;
 	struct option long_options[] = {{"help", 0, NULL, 'h'}, {"version", 0, NULL, 'V'}};
@@ -225,7 +225,10 @@ int main(int argc, char *argv[]) {
 				snapctx.intercom_ctx.port = atoi(optarg);
 				break;
 			case 'i':
-				snapctx.intercom_ctx.nodeid = atol(optarg);
+				errno = 0;
+				snapctx.intercom_ctx.nodeid = strtoul(optarg, NULL, 10);
+				if (errno == ERANGE || (errno != 0 && snapctx.intercom_ctx.nodeid == 0 ) || snapctx.intercom_ctx.nodeid == 0 )
+					exit_errno("unable to parse parameter for -i (%s)", optarg);
 				break;
 			case 'H':
 				snapctx.servername = snap_strdup(optarg);
@@ -247,6 +250,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	log_verbose("Using Node-ID: %zu\n", snapctx.intercom_ctx.nodeid);
 	catch_sigterm();
 	taskqueue_init(&snapctx.taskqueue_ctx);
 
