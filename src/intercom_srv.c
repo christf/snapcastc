@@ -179,9 +179,9 @@ bool intercom_handle_client_operation(intercom_ctx *ctx, intercom_packet_op *pac
 					audio_packet *ap = VECTOR_LSEARCH(&key, s->packet_buffer, cmp_audiopacket);
 					if (ap) {
 						intercom_send_packet_unicast(ctx, peer, ap->data, ap->len, port);
-						log_error("RE-SENT PACKET WITH id %lu\n", nonce);
+						log_error("re-sent packet %lu to client %d\n", nonce, ntohs(packet->hdr.clientid));
 					} else {
-						log_error("could not satisfy request to re-send packet with id %lu\n", nonce);
+						log_error("ERROR: could not satisfy request to re-send packet %lu to client %u\n", nonce, ntohs(packet->hdr.clientid));
 					}
 				}
 				break;
