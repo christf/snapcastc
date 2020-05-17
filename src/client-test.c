@@ -92,24 +92,24 @@ int pqueue() {
 
 	t = pqueue_dequeue(receivebuffer);
 	printf("chunk: %s\n", print_chunk(t));
-	printf("pqueue elements: %zu, capacity %lu\n", receivebuffer->size, receivebuffer->capacity);
+	printf("pqueue elements: %zu, capacity %zu\n", receivebuffer->size, receivebuffer->capacity);
 
 	t = pqueue_dequeue(receivebuffer);
 	printf("chunk: %s\n", print_chunk(t));
-	printf("pqueue elements: %zu, capacity %lu\n", receivebuffer->size, receivebuffer->capacity);
+	printf("pqueue elements: %zu, capacity %zu\n", receivebuffer->size, receivebuffer->capacity);
 
 	t = pqueue_dequeue(receivebuffer);
 	printf("chunk: %s\n", print_chunk(t));
-	printf("pqueue elements: %zu, capacity %lu\n", receivebuffer->size, receivebuffer->capacity);
+	printf("pqueue elements: %zu, capacity %zu\n", receivebuffer->size, receivebuffer->capacity);
 
 	t = pqueue_dequeue(receivebuffer);
 	printf("chunk: %s\n", print_chunk(t));
-	printf("pqueue elements: %zu, capacity %lu\n", receivebuffer->size, receivebuffer->capacity);
+	printf("pqueue elements: %zu, capacity %zu\n", receivebuffer->size, receivebuffer->capacity);
 
 	t = pqueue_dequeue(receivebuffer);
 	printf("chunk: %s\n", print_chunk(t));
 
-	printf("pqueue elements: %zu, capacity %lu\n", receivebuffer->size, receivebuffer->capacity);
+	printf("pqueue elements: %zu, capacity %zu\n", receivebuffer->size, receivebuffer->capacity);
 	pqueue_delete(receivebuffer);
 
 	return 0;
