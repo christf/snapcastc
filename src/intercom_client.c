@@ -63,12 +63,13 @@ void prune_missing_packets(intercom_ctx *ctx, uint32_t oldestnonce) {
 
 int assemble_hello(uint8_t *packet) {
 	packet[0] = HELLO;
-	packet[1] = 11;
-	uint32_t n_tmp = htonl(snapctx.intercom_ctx.nodeid);
-	memcpy(&packet[2], &n_tmp, sizeof(uint32_t));
-	n_tmp = htonl(snapctx.alsaplayer_ctx.latency_ms);
-	memcpy(&packet[6], &n_tmp, sizeof(uint32_t));
-	packet[10] = obtain_volume(&snapctx.alsaplayer_ctx);
+	packet[1] = 9;
+	uint16_t s_tmp = htons(snapctx.intercom_ctx.nodeid);
+	memcpy(&packet[2], &s_tmp, sizeof(uint16_t));
+	log_error("nodeid: %zu\n", snapctx.intercom_ctx.nodeid);
+	uint32_t n_tmp = htonl(snapctx.alsaplayer_ctx.latency_ms);
+	memcpy(&packet[4], &n_tmp, sizeof(uint32_t));
+	packet[8] = obtain_volume(&snapctx.alsaplayer_ctx);
 	return packet[1];
 }
 
@@ -206,7 +207,7 @@ bool remove_request(uint32_t nonce) {
 	if (ap) {
 		int i = VECTOR_GETINDEX(snapctx.intercom_ctx.missing_packets, ap);
 		VECTOR_DELETE(snapctx.intercom_ctx.missing_packets, i);
-		log_verbose("removing request %lu from missing_packets vector index %d\n", nonce, i);
+		log_verbose("removing request %zu from missing_packets vector index %d\n", nonce, i);
 		return true;
 	}
 	return false;
@@ -274,7 +275,7 @@ void intercom_send_request(intercom_ctx *ctx, audio_packet *mp) {
 	post_task(&snapctx.taskqueue_ctx, 0, 0, request_task, free_intercom_task, data);
 }
 
-void remove_old_data_from_queue(intercom_ctx *ctx) {
+void remove_old_data_from_receivebuffer(intercom_ctx *ctx) {
 	struct timespec oldest_play_at;
 	struct timespec ctime;
 
@@ -296,7 +297,7 @@ void remove_old_data_from_queue(intercom_ctx *ctx) {
 }
 
 void intercom_put_chunk(intercom_ctx *ctx, pcmChunk *chunk) {
-	remove_old_data_from_queue(ctx);
+	remove_old_data_from_receivebuffer(ctx);
 
 	pqueue_enqueue(ctx->receivebuffer, chunk);
 	underrun = false;
@@ -376,7 +377,7 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 							VECTOR_ADD(snapctx.intercom_ctx.missing_packets, ap);
 							limit_missing_packets(ctx, ctx->receivebuffer->capacity);
 							intercom_send_request(ctx, &ap);
-							log_verbose("requested packet with seqno: %lu\n", i);
+							log_verbose("requested packet with seqno: %zu for client: %zu\n", i, ctx->nodeid);
 						}
 					}
 				}
