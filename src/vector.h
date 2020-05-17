@@ -130,8 +130,8 @@ void _snap_vector_delete(snap_vector_desc_t *desc, void **data, size_t pos, size
 
    \hideinitializer
 */
-#define VECTOR_DELETE(v, pos)                                                                 \
-	({                                                                                    \
+#define VECTOR_DELETE(v, pos)                                                         \
+	({                                                                                \
 		__typeof__(v) *_v = &(v);                                                     \
 		_snap_vector_delete(&_v->desc, (void **)&_v->data, (pos), sizeof(*_v->data)); \
 	})
@@ -153,8 +153,8 @@ void _snap_vector_delete(snap_vector_desc_t *desc, void **data, size_t pos, size
 
    \hideinitializer
 */
-#define VECTOR_BSEARCH(key, v, cmp)                                                                                                            \
-	({                                                                                                                                     \
+#define VECTOR_BSEARCH(key, v, cmp)                                                                                                    \
+	({                                                                                                                                 \
 		__typeof__(v) *_v = &(v);                                                                                                      \
 		const __typeof__(*_v->data) *_key = (key);                                                                                     \
 		int (*_cmp)(__typeof__(_key), __typeof__(_key)) = (cmp);                                                                       \
@@ -167,8 +167,8 @@ void _snap_vector_delete(snap_vector_desc_t *desc, void **data, size_t pos, size
 
    \hideinitializer
 */
-#define VECTOR_LSEARCH(key, v, cmp)                                                                                                           \
-	({                                                                                                                                    \
+#define VECTOR_LSEARCH(key, v, cmp)                                                                                                   \
+	({                                                                                                                                \
 		__typeof__(v) *_v = &(v);                                                                                                     \
 		const __typeof__(*_v->data) *_key = (key);                                                                                    \
 		int (*_cmp)(__typeof__(_key), __typeof__(_key)) = (cmp);                                                                      \
