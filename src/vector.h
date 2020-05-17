@@ -71,7 +71,7 @@ void _snap_vector_delete(snap_vector_desc_t *desc, void **data, size_t pos, size
 
    \hideinitializer
 */
-#define VECTOR_FREE(v) free((v).data)
+#define VECTOR_FREE(v) ({v.desc.length = 0;free((v).data); (v).data = NULL;})
 
 /**
    Returns the number of elements in the vector \e v
