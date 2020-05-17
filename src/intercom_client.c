@@ -342,11 +342,12 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 	}
 
 	struct timespec play_at = {
-	    .tv_sec = chunk->play_at_tv_sec, .tv_nsec = chunk->play_at_tv_nsec,
+	    .tv_sec = chunk->play_at_tv_sec,
+	    .tv_nsec = chunk->play_at_tv_nsec,
 	};
 
-	log_verbose("read chunk from packet: %d samples: %d frame size: %d channels: %d packet_len: %d, play_at %s\n", chunk->size, chunk->samples,
-		    chunk->frame_size, chunk->channels, packet_len, print_timespec(&play_at));
+	log_verbose("read chunk from packet (%d): %d samples: %d frame size: %d channels: %d packet length: %d, to be played at %s\n", this_seqno,
+		    chunk->size, chunk->samples, chunk->frame_size, chunk->channels, packet_len, print_timespec(&play_at));
 
 	struct timespec ctime;
 	obtainsystime(&ctime);
@@ -478,7 +479,12 @@ int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
 }
 
 void intercom_reinit(void *d) {
-	intercom_ctx *ctx = (intercom_ctx*) d;
+	intercom_ctx *ctx = (intercom_ctx *)d;
+
+	ctx->receivebuffer = NULL;
+	VECTOR_INIT(ctx->recent_packets);
+	VECTOR_INIT(ctx->missing_packets);
+
 	obtain_ip_from_name(snapctx.servername, &ctx->serverip);
 
 	ctx->fd = socket(PF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0);
@@ -511,15 +517,15 @@ void intercom_uninit(intercom_ctx *ctx) {
 		chunk_free_members(p);
 		free(p);
 	}
+
+	pqueue_delete(ctx->receivebuffer);
+	VECTOR_FREE(ctx->missing_packets);
+	VECTOR_FREE(ctx->recent_packets);
+	ctx->receivebuffer = NULL;
 }
 
 void intercom_init(intercom_ctx *ctx) {
 	obtainrandom(&nonce, sizeof(uint32_t), 0);
-	ctx->receivebuffer = NULL;
-
-	VECTOR_INIT(ctx->recent_packets);
-	VECTOR_INIT(ctx->missing_packets);
 
 	intercom_reinit(ctx);
 }
-
