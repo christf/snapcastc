@@ -1,11 +1,11 @@
-#include "snapcast.h"
+#include "intercom_client.h"
+#include "alloc.h"
 #include "alsaplayer.h"
 #include "intercom_common.h"
-#include "intercom_client.h"
-#include "util.h"
-#include "alloc.h"
-#include "timespec.h"
+#include "snapcast.h"
 #include "syscallwrappers.h"
+#include "timespec.h"
+#include "util.h"
 
 extern uint32_t nonce;
 #define REQUEST_RETRY_INTERVAL_MS 100
@@ -61,7 +61,6 @@ void prune_missing_packets(intercom_ctx *ctx, uint32_t oldestnonce) {
 	}
 }
 
-
 int assemble_hello(uint8_t *packet) {
 	packet[0] = HELLO;
 	packet[1] = 11;
@@ -87,7 +86,6 @@ void hello_task(void *d) {
 	intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len, snapctx.intercom_ctx.port);
 	data->ctx->hello_task = post_task(&snapctx.taskqueue_ctx, 1, 500, hello_task, NULL, data);
 }
-
 
 struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx) {
 	struct timespec ret = {};
@@ -276,7 +274,6 @@ void intercom_send_request(intercom_ctx *ctx, audio_packet *mp) {
 	post_task(&snapctx.taskqueue_ctx, 0, 0, request_task, free_intercom_task, data);
 }
 
-
 void remove_old_data_from_queue(intercom_ctx *ctx) {
 	struct timespec oldest_play_at;
 	struct timespec ctime;
@@ -428,7 +425,7 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 		if (intercom_recently_seen(ctx, hdr)) {
 			if (already_requesting(ctx, hdr->nonce))
 				log_error("DROPPING audio packet with id %lu which we have previously seen yet newly requested.\n", hdr->nonce);
-			else 
+			else
 				log_error("DROPPING audio packet with id %lu which we have previously seen.\n", hdr->nonce);
 			return;
 		}
@@ -480,7 +477,6 @@ int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
 	return 0;
 }
 
-
 void intercom_reinit(void *d) {
 	intercom_ctx *ctx = (intercom_ctx*) d;
 	obtain_ip_from_name(snapctx.servername, &ctx->serverip);
@@ -490,7 +486,8 @@ void intercom_reinit(void *d) {
 		exit_error("creating socket for intercom on node-IP");
 
 	struct sockaddr_in6 server_addr = {
-	    .sin6_family = AF_INET6, .sin6_port = htons(ctx->port),
+	    .sin6_family = AF_INET6,
+	    .sin6_port = htons(ctx->port),
 	};
 
 	server_addr.sin6_addr = ctx->serverip;
@@ -502,8 +499,8 @@ void intercom_reinit(void *d) {
 }
 
 void intercom_uninit(intercom_ctx *ctx) {
-	free(((struct intercom_task*)(ctx->hello_task->data))->packet);
-	free(((struct intercom_task*)(ctx->hello_task->data))->recipient);
+	free(((struct intercom_task *)(ctx->hello_task->data))->packet);
+	free(((struct intercom_task *)(ctx->hello_task->data))->recipient);
 	free(ctx->hello_task->data);
 	drop_task(&snapctx.taskqueue_ctx, ctx->hello_task);
 	close(ctx->fd);
