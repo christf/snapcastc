@@ -14,20 +14,24 @@ add_library(server_deps OBJECT ${SERVER_DEPS})
 
 add_executable(snapcast-server server.c $<TARGET_OBJECTS:server_deps> $<TARGET_OBJECTS:common_libs>)
 add_executable(snapcast-client client.c $<TARGET_OBJECTS:client_deps> $<TARGET_OBJECTS:common_libs>)
-add_executable(snapcast-test test.c $<TARGET_OBJECTS:server_deps> $<TARGET_OBJECTS:common_libs>)
+add_executable(snapcast-test-srv server-test.c $<TARGET_OBJECTS:server_deps> $<TARGET_OBJECTS:common_libs>)
+add_executable(snapcast-test-client client-test.c $<TARGET_OBJECTS:client_deps> $<TARGET_OBJECTS:common_libs>)
 
 target_link_libraries(snapcast-server ${JSON_C_LIBRARIES})
 target_link_libraries(snapcast-server ${ALSA_LIBRARIES})
 
-target_link_libraries(snapcast-test ${JSON_C_LIBRARIES})
-target_link_libraries(snapcast-test ${ALSA_LIBRARIES})
+target_link_libraries(snapcast-test-srv ${JSON_C_LIBRARIES})
+target_link_libraries(snapcast-test-srv ${ALSA_LIBRARIES})
+target_link_libraries(snapcast-test-client ${JSON_C_LIBRARIES})
+target_link_libraries(snapcast-test-client ${ALSA_LIBRARIES})
 
 target_link_libraries(snapcast-client ${JSON_C_LIBRARIES})
 target_link_libraries(snapcast-client ${ALSA_LIBRARIES})
 
 set_target_properties(snapcast-client PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm")
 set_target_properties(snapcast-server PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm")
-set_target_properties(snapcast-test PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm")
+set_target_properties(snapcast-test-srv PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm")
+set_target_properties(snapcast-test-client PROPERTIES COMPILE_FLAGS "-std=gnu11 -fno-omit-frame-pointer -Wall" LINK_FLAGS "-lm")
 
 install(TARGETS snapcast-client RUNTIME DESTINATION bin)
 install(TARGETS snapcast-server RUNTIME DESTINATION bin)

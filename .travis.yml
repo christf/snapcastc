@@ -17,4 +17,4 @@ before_install:
 #
 script:
     - docker run -v $(pwd):/project -a STDOUT -a STDERR christf/snapcastc-build /bin/sh -c "
-      cd /project && mkdir build && cd build && cmake .. && make -j5 && ./src/snapcast-test"
+      cd /project && mkdir build && cd build && cmake .. && make -j5 && ./src/snapcast-test-srv && ./src/snapcast-test-client"
