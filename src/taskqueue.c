@@ -73,7 +73,7 @@ taskqueue_t *post_task(taskqueue_ctx *ctx, time_t timeout, long millisecs, void 
 }
 
 void drop_task(taskqueue_ctx *ctx, taskqueue_t *task) {
-	if (task->running) {
+	if (task && task->running) {
 		return; // nothing to do, will be cleaned up and freed after the task finished running
 	}
 
