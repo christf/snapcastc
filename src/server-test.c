@@ -98,7 +98,7 @@ int pcmchunk_header() {
 int parse_streaminfo() {
 	char optarg[1024];
 	stream s = {};
-	snprintf(optarg, 1024, "pipe:///tmp/snapfifo?buffer_ms=20&codec=opus&name=default&sampleformat=48000:16:2&timeout_ms=1000");
+	snprintf(optarg, 1024, "pipe:///tmp/snapfifo?buffer_ms=20&codec=opus&name=default&sampleformat=48000:16:2");
 
 	if (!stream_parse(&s, optarg))
 		FAIL();
@@ -106,8 +106,6 @@ int parse_streaminfo() {
 	if (s.protocol != PIPE)
 		FAIL();
 	if (strcmp(s.inputpipe.fname, "/tmp/snapfifo"))
-		FAIL();
-	if (s.inputpipe.pipelength_ms != 1000)
 		FAIL();
 	if (strcmp(s.name, "default"))
 		FAIL();

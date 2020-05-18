@@ -19,8 +19,8 @@
 void clientmgr_send_audio_buffer_to_client(client_t *client) {
 	stream *s = stream_find(client);
 	for (int i = 0; i < VECTOR_LEN(s->packet_buffer); ++i) {
-		log_verbose("sending packet %d to %s\n", i, print_ip(&client->ip));
 		audio_packet *ap = &VECTOR_INDEX(s->packet_buffer, i);
+		log_verbose("sending packet %d to %s\n", ap->nonce, print_ip(&client->ip));
 		intercom_send_packet_unicast(&snapctx.intercom_ctx, &client->ip, ap->data, ap->len, client->port);
 	}
 }
@@ -57,7 +57,7 @@ void schedule_delete_client(void *d) {
 client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip, const uint16_t port) {
 	struct sockaddr_in6 speer = {};
 
-	log_verbose("\033[34mADDING client %lu\033[0m\n", id);
+	log_verbose("\033[34mADDING client %zu\033[0m\n", id);
 
 	memcpy(&speer.sin6_addr, ip, sizeof(struct in6_addr));
 	speer.sin6_port = port;
@@ -86,6 +86,7 @@ client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip
 struct client *get_client(stream *s, const uint32_t id) {
 	client_vector *vector = &s->clients;
 	client_t key = {.id = id};
+	log_verbose("looking for client %zu in stream\n", id);
 	return VECTOR_LSEARCH(&key, *vector, client_cmp);
 }
 

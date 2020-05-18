@@ -31,6 +31,16 @@ Linux. Patches for other platforms are welcome.
 While it is important for clients to run on small devices, audio quality is 
 valued above CPU utilization. The smallest target platform is Raspberry PI B.
 
+On this device which is clocked to 800Mhz, when using Opus, snapcastc-client 
+utilizes 14% CPU. snapcastc-server utilizes 36% CPU during regular playback for 
+a single stream. When starting a stream the buffers are filled and 
+snapcastc-server will max out a single core.
+
+This means there a single Pi can run snapcastc-server, snapcastc-client and 
+there is barely enough room for mpd - but nothing more. Once the buffers are 
+filled, the pi runs with 85-90%% CPU usage
+
+
 
 ## Installation
 
@@ -95,7 +105,7 @@ Options marked with (*) are not implemented yet.
 
 I am starting snapserver like this:
 ```
-snapcast-server -b 25000 -s "pipe:///tmp/snapfifo?buffer_ms=120&codec=opus&name=default&sampleformat=48000:16:2&timeout_ms=10000" -p 1704
+snapcast-server -b 25000 -s "pipe:///tmp/snapfifo?buffer_ms=120&codec=opus&name=default&sampleformat=48000:16:2" -p 1704
 ```
 
 ### Client

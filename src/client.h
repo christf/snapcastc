@@ -11,7 +11,7 @@ typedef struct client {
 	uint16_t port;
 	char name[64];
 	char hostname[NI_MAXHOST];
-	uint32_t id;
+	uint16_t id;
 	int group;		   // TODO: implement status
 	bool connected;		   // TODO implement
 	struct timespec lastseen;  // TODO implement

@@ -23,3 +23,7 @@ struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx);
 bool intercom_getnextaudiochunk(intercom_ctx *ctx, pcmChunk *c);
 bool intercom_peeknextaudiochunk(intercom_ctx *ctx, pcmChunk **ret);
 
+
+int receivebuffer_cmp(const void *d1, const void *d2);
+
+

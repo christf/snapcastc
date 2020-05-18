@@ -1,11 +1,11 @@
-#include "snapcast.h"
+#include "intercom_client.h"
+#include "alloc.h"
 #include "alsaplayer.h"
 #include "intercom_common.h"
-#include "intercom_client.h"
-#include "util.h"
-#include "alloc.h"
-#include "timespec.h"
+#include "snapcast.h"
 #include "syscallwrappers.h"
+#include "timespec.h"
+#include "util.h"
 
 extern uint32_t nonce;
 #define REQUEST_RETRY_INTERVAL_MS 100
@@ -61,15 +61,15 @@ void prune_missing_packets(intercom_ctx *ctx, uint32_t oldestnonce) {
 	}
 }
 
-
 int assemble_hello(uint8_t *packet) {
 	packet[0] = HELLO;
-	packet[1] = 11;
-	uint32_t n_tmp = htonl(snapctx.intercom_ctx.nodeid);
-	memcpy(&packet[2], &n_tmp, sizeof(uint32_t));
-	n_tmp = htonl(snapctx.alsaplayer_ctx.latency_ms);
-	memcpy(&packet[6], &n_tmp, sizeof(uint32_t));
-	packet[10] = obtain_volume(&snapctx.alsaplayer_ctx);
+	packet[1] = 9;
+	uint16_t s_tmp = htons(snapctx.intercom_ctx.nodeid);
+	memcpy(&packet[2], &s_tmp, sizeof(uint16_t));
+	log_error("nodeid: %zu\n", snapctx.intercom_ctx.nodeid);
+	uint32_t n_tmp = htonl(snapctx.alsaplayer_ctx.latency_ms);
+	memcpy(&packet[4], &n_tmp, sizeof(uint32_t));
+	packet[8] = obtain_volume(&snapctx.alsaplayer_ctx);
 	return packet[1];
 }
 
@@ -87,7 +87,6 @@ void hello_task(void *d) {
 	intercom_send_packet_unicast(&snapctx.intercom_ctx, data->recipient, (uint8_t *)data->packet, data->packet_len, snapctx.intercom_ctx.port);
 	data->ctx->hello_task = post_task(&snapctx.taskqueue_ctx, 1, 500, hello_task, NULL, data);
 }
-
 
 struct timespec intercom_get_time_next_audiochunk(intercom_ctx *ctx) {
 	struct timespec ret = {};
@@ -208,7 +207,7 @@ bool remove_request(uint32_t nonce) {
 	if (ap) {
 		int i = VECTOR_GETINDEX(snapctx.intercom_ctx.missing_packets, ap);
 		VECTOR_DELETE(snapctx.intercom_ctx.missing_packets, i);
-		log_verbose("removing request %lu from missing_packets vector index %d\n", nonce, i);
+		log_verbose("removing request %zu from missing_packets vector index %d\n", nonce, i);
 		return true;
 	}
 	return false;
@@ -276,8 +275,7 @@ void intercom_send_request(intercom_ctx *ctx, audio_packet *mp) {
 	post_task(&snapctx.taskqueue_ctx, 0, 0, request_task, free_intercom_task, data);
 }
 
-
-void remove_old_data_from_queue(intercom_ctx *ctx) {
+void remove_old_data_from_receivebuffer(intercom_ctx *ctx) {
 	struct timespec oldest_play_at;
 	struct timespec ctime;
 
@@ -299,7 +297,7 @@ void remove_old_data_from_queue(intercom_ctx *ctx) {
 }
 
 void intercom_put_chunk(intercom_ctx *ctx, pcmChunk *chunk) {
-	remove_old_data_from_queue(ctx);
+	remove_old_data_from_receivebuffer(ctx);
 
 	pqueue_enqueue(ctx->receivebuffer, chunk);
 	underrun = false;
@@ -345,11 +343,12 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 	}
 
 	struct timespec play_at = {
-	    .tv_sec = chunk->play_at_tv_sec, .tv_nsec = chunk->play_at_tv_nsec,
+	    .tv_sec = chunk->play_at_tv_sec,
+	    .tv_nsec = chunk->play_at_tv_nsec,
 	};
 
-	log_verbose("read chunk from packet: %d samples: %d frame size: %d channels: %d packet_len: %d, play_at %s\n", chunk->size, chunk->samples,
-		    chunk->frame_size, chunk->channels, packet_len, print_timespec(&play_at));
+	log_verbose("read chunk from packet (%d): %d samples: %d frame size: %d channels: %d packet length: %d, to be played at %s\n", this_seqno,
+		    chunk->size, chunk->samples, chunk->frame_size, chunk->channels, packet_len, print_timespec(&play_at));
 
 	struct timespec ctime;
 	obtainsystime(&ctime);
@@ -378,7 +377,7 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 							VECTOR_ADD(snapctx.intercom_ctx.missing_packets, ap);
 							limit_missing_packets(ctx, ctx->receivebuffer->capacity);
 							intercom_send_request(ctx, &ap);
-							log_verbose("requested packet with seqno: %lu\n", i);
+							log_verbose("requested packet with seqno: %zu for client: %zu\n", i, ctx->nodeid);
 						}
 					}
 				}
@@ -428,7 +427,7 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 		if (intercom_recently_seen(ctx, hdr)) {
 			if (already_requesting(ctx, hdr->nonce))
 				log_error("DROPPING audio packet with id %lu which we have previously seen yet newly requested.\n", hdr->nonce);
-			else 
+			else
 				log_error("DROPPING audio packet with id %lu which we have previously seen.\n", hdr->nonce);
 			return;
 		}
@@ -480,9 +479,13 @@ int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
 	return 0;
 }
 
-
 void intercom_reinit(void *d) {
-	intercom_ctx *ctx = (intercom_ctx*) d;
+	intercom_ctx *ctx = (intercom_ctx *)d;
+
+	ctx->receivebuffer = NULL;
+	VECTOR_INIT(ctx->recent_packets);
+	VECTOR_INIT(ctx->missing_packets);
+
 	obtain_ip_from_name(snapctx.servername, &ctx->serverip);
 
 	ctx->fd = socket(PF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0);
@@ -490,7 +493,8 @@ void intercom_reinit(void *d) {
 		exit_error("creating socket for intercom on node-IP");
 
 	struct sockaddr_in6 server_addr = {
-	    .sin6_family = AF_INET6, .sin6_port = htons(ctx->port),
+	    .sin6_family = AF_INET6,
+	    .sin6_port = htons(ctx->port),
 	};
 
 	server_addr.sin6_addr = ctx->serverip;
@@ -502,8 +506,8 @@ void intercom_reinit(void *d) {
 }
 
 void intercom_uninit(intercom_ctx *ctx) {
-	free(((struct intercom_task*)(ctx->hello_task->data))->packet);
-	free(((struct intercom_task*)(ctx->hello_task->data))->recipient);
+	free(((struct intercom_task *)(ctx->hello_task->data))->packet);
+	free(((struct intercom_task *)(ctx->hello_task->data))->recipient);
 	free(ctx->hello_task->data);
 	drop_task(&snapctx.taskqueue_ctx, ctx->hello_task);
 	close(ctx->fd);
@@ -514,15 +518,15 @@ void intercom_uninit(intercom_ctx *ctx) {
 		chunk_free_members(p);
 		free(p);
 	}
+
+	pqueue_delete(ctx->receivebuffer);
+	VECTOR_FREE(ctx->missing_packets);
+	VECTOR_FREE(ctx->recent_packets);
+	ctx->receivebuffer = NULL;
 }
 
 void intercom_init(intercom_ctx *ctx) {
 	obtainrandom(&nonce, sizeof(uint32_t), 0);
-	ctx->receivebuffer = NULL;
-
-	VECTOR_INIT(ctx->recent_packets);
-	VECTOR_INIT(ctx->missing_packets);
 
 	intercom_reinit(ctx);
 }
-

@@ -145,6 +145,10 @@ void inputpipe_resume_read(void *d) {
 void inputpipe_hold(inputpipe_ctx *ctx) {
 	if (ctx->state == PLAYING)
 		del_fd(snapctx.efd, ctx->fd);
+	if (ctx->state == THROTTLE) {
+		drop_task(&snapctx.taskqueue_ctx, ctx->resume_task);
+		ctx->resume_task = NULL;
+	}
 	set_idle(ctx);
 }
 
