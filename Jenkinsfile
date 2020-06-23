@@ -8,7 +8,7 @@ node {
 
     // TODO can we generate the version from ${env.BUILD_NUMBER} and still pass debian linters
     stage('Preparation') { // for display purposes
-      git branch: [[name: gitbranch]] ,url: 'https://github.com/christf/snapcastc.git'
+      git branch: env.gitbranch, url: 'https://github.com/christf/snapcastc.git'
       if (params.DEBUG) {
         RELEASETYPE = "Debug"
 	DATE = sh (
