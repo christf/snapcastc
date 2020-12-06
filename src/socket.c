@@ -46,7 +46,7 @@
 
 void json_object_print_and_put(int fd, json_object *obj) {
 	log_verbose("%s\n", json_object_to_json_string_ext(obj, 0));
-	dprintf(fd, "%s", json_object_to_json_string_ext(obj, 0));
+	dprintf(fd, "%s\r\n", json_object_to_json_string_ext(obj, 0));
 	json_object_put(obj);
 }
 
