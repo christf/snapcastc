@@ -1,0 +1,4 @@
+SNAPCAST_SERVEROPTS="-B 120 -b 25000 -s /tmp/snapfifo"
+
+
+SNAPCAST_CLIENTOPTS="-s snapclient -m snapclient -H media.lan"
