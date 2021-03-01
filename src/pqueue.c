@@ -38,7 +38,7 @@ PQueue *pqueue_new(int (*cmp)(const void *d1, const void *d2), size_t capacity) 
 */
 void pqueue_delete(PQueue *q) {
 	if (NULL == q) {
-		log_debug("Priority Queue is already NULL. Nothing to free.");
+		log_debug("Priority Queue is already NULL. Nothing to free.\n");
 		return;
 	}
 	log_debug("pqueue delete\n");
@@ -56,7 +56,7 @@ void pqueue_enqueue(PQueue *q, const void *data) {
 	void *tmp = NULL;
 	// NP_CHECK(q);
 	if (q->size >= q->capacity) {
-		log_debug("Priority Queue is full. Cannot add another element .");
+		log_debug("Priority Queue is full. Cannot add another element.\n");
 		return;
 	}
 	/* Adds element last */
