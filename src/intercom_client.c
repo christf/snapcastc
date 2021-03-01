@@ -190,12 +190,15 @@ void copy_intercom_task(struct intercom_task *old, struct intercom_task *new) {
 	new->packet = snap_alloc(old->packet_len);
 	memcpy(new->packet, old->packet, new->packet_len);
 
-	new->recipient = NULL;
 	new->ctx = old->ctx;
 	if (old->recipient) {
 		new->recipient = snap_alloc_aligned(sizeof(struct in6_addr), sizeof(struct in6_addr));
 		memcpy(new->recipient, old->recipient, sizeof(struct in6_addr));
 	}
+	else {
+		new->recipient = NULL;
+	}
+
 
 	new->retries_left = old->retries_left;
 }
