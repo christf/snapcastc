@@ -19,7 +19,7 @@
 #define NONCE_MAX 0xFFFFFFFF
 
 enum { CLIENT_OPERATION, AUDIO_DATA, SERVER_OPERATION };  // Packet types
-	enum { REQUEST, HELLO };				  // TLV types client op
+enum { REQUEST, HELLO };				  // TLV types client op
 enum { AUDIO,
        AUDIO_PCM,
        AUDIO_OPUS,
