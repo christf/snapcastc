@@ -1,6 +1,5 @@
 #pragma once
 #include "pcmchunk.h"
-#include "client.h"
 
 #include <netinet/in.h>
 #include <stdbool.h>
@@ -22,8 +21,6 @@ const char *print_codec(int codec);
 const char *print_stream_protocol(int protocol);
 const char *print_inputpipe_status(int status);
 const char *print_chunk(pcmChunk *chunk);
-
-int client_cmp(const struct client *c1, const struct client *c2);
 
 int max(const int a, const int b);
 

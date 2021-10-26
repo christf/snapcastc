@@ -22,6 +22,10 @@ endif(ALSA_FOUND)
 # find_package_handle_standard_args(JSON_C REQUIRED_VARS JSON_C_LIBRARIES JSON_C_INCLUDE_DIR)
 # mark_as_advanced(JSON_C_INCLUDE_DIR JSON_C_LIBRARIES JSON_C_CFLAGS_OTHER JSON_C_LDFLAGS_OTHER)
 
+
+# see #68
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fcommon")
+
 if (WITH_ASAN)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
