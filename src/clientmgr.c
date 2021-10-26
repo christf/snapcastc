@@ -83,6 +83,16 @@ client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip
 	return ret;
 }
 
+int client_cmp(const struct client *c1, const struct client *c2) {
+	if (c1->id > c2->id)
+		return 1;
+	else if (c1->id < c2->id)
+		return -1;
+	else
+		return 0;
+}
+
+
 struct client *get_client(stream *s, const uint32_t id) {
 	client_vector *vector = &s->clients;
 	client_t key = {.id = id};
