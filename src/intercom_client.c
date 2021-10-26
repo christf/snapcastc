@@ -73,9 +73,57 @@ int assemble_hello(uint8_t *packet) {
 	return packet[1];
 }
 
+int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
+	struct addrinfo hints = {};
+	struct addrinfo *result = NULL, *rp;
+	int s, sfd;
+
+	hints.ai_family = AF_INET6;
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+	hints.ai_protocol = 0;
+
+	s = getaddrinfo(hostname, NULL, &hints, &result);
+	if (s != 0) {
+		exit_errno("getaddrinfo: could not resolve host %s, getaddrinfo failed", hostname);
+	}
+
+	for (rp = result; rp != NULL; rp = rp->ai_next) {
+		sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if (sfd == -1)
+			continue;
+
+		struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)result->ai_addr;
+		memcpy(&addr->s6_addr, &s6->sin6_addr, sizeof(struct in6_addr));
+		close(sfd);
+		break;
+	}
+	if (rp == NULL) {
+		exit_error("could not connect to host %s\n", hostname);
+	}
+
+	log_debug("resolved %s to %s\n", hostname, print_ip(addr));
+
+	freeaddrinfo(result);
+	return 0;
+}
+
+
 void hello_task(void *d) {
 	log_verbose("saying hello to server\n");
 	struct intercom_task *data = d;
+
+	struct in6_addr tmp_serverip = {};
+	obtain_ip_from_name(snapctx.servername, &tmp_serverip);
+	if (memcmp(&tmp_serverip, data->recipient, sizeof(struct in6_addr))) {
+		log_error("IP address of server changed from %s to %s\n", print_ip(data->recipient), print_ip(&tmp_serverip));
+		intercom_ctx *ictx = data->ctx;
+		intercom_uninit(ictx);
+		alsaplayer_uninit(&snapctx.alsaplayer_ctx);
+		intercom_reinit(ictx);
+		return;
+	}
+
 	intercom_packet_hello *hello = (intercom_packet_hello *)data->packet;
 
 	hello->hdr.nonce = get_nonce(&nonce);
@@ -190,12 +238,15 @@ void copy_intercom_task(struct intercom_task *old, struct intercom_task *new) {
 	new->packet = snap_alloc(old->packet_len);
 	memcpy(new->packet, old->packet, new->packet_len);
 
-	new->recipient = NULL;
 	new->ctx = old->ctx;
 	if (old->recipient) {
 		new->recipient = snap_alloc_aligned(sizeof(struct in6_addr), sizeof(struct in6_addr));
 		memcpy(new->recipient, old->recipient, sizeof(struct in6_addr));
 	}
+	else {
+		new->recipient = NULL;
+	}
+
 
 	new->retries_left = old->retries_left;
 }
@@ -444,39 +495,6 @@ void intercom_handle_packet(intercom_ctx *ctx, uint8_t *packet, ssize_t packet_l
 		    "originated from: %s. This is a guess with current or previous positions of the originator\n",
 		    hdr->version, print_ip((void *)&packet[6]));
 	}
-}
-
-int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
-	struct addrinfo hints = {};
-	struct addrinfo *result = NULL, *rp;
-	int s, sfd;
-
-	hints.ai_family = AF_INET6;
-	hints.ai_socktype = SOCK_DGRAM;
-	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
-	hints.ai_protocol = 0;
-
-	s = getaddrinfo(hostname, NULL, &hints, &result);
-	if (s != 0) {
-		exit_errno("getaddrinfo: could not resolve host %s, getaddrinfo failed", hostname);
-	}
-
-	for (rp = result; rp != NULL; rp = rp->ai_next) {
-		sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-		if (sfd == -1)
-			continue;
-
-		struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)result->ai_addr;
-		memcpy(&addr->s6_addr, &s6->sin6_addr, sizeof(struct in6_addr));
-		close(sfd);
-		break;
-	}
-	if (rp == NULL) {
-		exit_error("could not connect to host %s\n", hostname);
-	}
-
-	freeaddrinfo(result);
-	return 0;
 }
 
 void intercom_reinit(void *d) {
