@@ -18,12 +18,8 @@
 #pragma once
 
 #include "alsaplayer.h"
-#include "clientmgr.h"
-#include "inputpipe.h"
 #include "intercom_common.h"
-#include "opuscodec.h"
 #include "socket.h"
-#include "stream.h"
 #include "taskqueue.h"
 #include "types.h"
 
