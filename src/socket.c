@@ -341,12 +341,10 @@ bool handle_client_setvolume(jsonrpc_request *request, int fd) {
 
 			if (vol_percent) {
 				volume_int = json_object_get_int(vol_percent);
-				json_object_put(vol_percent);
 			}
 
 			if (mute) {
 				muted = json_object_get_boolean(mute);
-				json_object_put(mute);
 			}
 
 			json_object_put(jobj);
