@@ -379,10 +379,10 @@ int handle_request(jsonrpc_request *request, int fd) {
 	if (!strncmp(request->method, "Server.GetRPCVersion", 20)) {
 		handle_GetRPCVersion(request, fd);
 	} else if (!strncmp(request->method, "Client.SetStream", 16)) {
-		log_debug("calling server Client.SetStream\n");
+		log_debug("calling Client.SetStream\n");
 		handle_client_setstream(request, fd);
 	} else if (!strncmp(request->method, "Client.SetVolume", 16)) {
-		log_debug("calling server Client.SetVolume\n");
+		log_debug("calling Client.SetVolume\n");
 		handle_client_setvolume(request, fd);
 	} else if (!strncmp(request->method, "Server.GetStatus", 16)) {
 		log_debug("calling server getstatus\n");
