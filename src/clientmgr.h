@@ -20,18 +20,18 @@ typedef struct {
 } client_stream;
 
 struct delete_client_data {
-	uint32_t id;
+	uint16_t id;
 };
 
-client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *host, const uint16_t port);
-struct client *get_client(stream *s, const uint32_t clientid);
+client_t *new_client(client_t *ret, const uint16_t id, const struct in6_addr *host, const uint16_t port);
+struct client *get_client(stream *s, const uint16_t clientid);
 
-client_stream find_client(const uint32_t id);
+client_stream find_client(const uint16_t id);
 
 void print_client(struct client *client);
 bool clientmgr_refresh_client(struct client *client);
 void clientmgr_purge_clients(stream *s);
-void clientmgr_delete_client(const uint32_t clientid);
+void clientmgr_delete_client(const uint16_t clientid);
 void clientmgr_stop_clients(stream *s);
 bool clientmgr_client_setmute(client_t *client, bool mute);
 bool clientmgr_client_refreshvolume(client_t *client, uint8_t volume);

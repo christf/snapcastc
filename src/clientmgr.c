@@ -54,7 +54,7 @@ void schedule_delete_client(void *d) {
 	clientmgr_delete_client(data->id);
 }
 
-client_t *new_client(client_t *ret, const uint32_t id, const struct in6_addr *ip, const uint16_t port) {
+client_t *new_client(client_t *ret, const uint16_t id, const struct in6_addr *ip, const uint16_t port) {
 	struct sockaddr_in6 speer = {};
 
 	log_verbose("\033[34mADDING client %zu\033[0m\n", id);
@@ -93,7 +93,7 @@ int client_cmp(const struct client *c1, const struct client *c2) {
 }
 
 
-struct client *get_client(stream *s, const uint32_t id) {
+struct client *get_client(stream *s, const uint16_t id) {
 	client_vector *vector = &s->clients;
 	client_t key = {.id = id};
 	log_verbose("looking for client %zu in stream\n", id);
@@ -117,7 +117,7 @@ void delete_client_internal(stream *s, client_t *c) {
 
 /** Given an id deletes a client. Safe to call if the client is not known.
 */
-void clientmgr_delete_client(const uint32_t id) {
+void clientmgr_delete_client(const uint16_t id) {
 	client_stream cs = find_client(id);
 
 	delete_client_internal(cs.stream, cs.client);
@@ -146,7 +146,7 @@ bool is_roughly(uint8_t a, uint8_t b) {
 	return false;
 }
 
-client_stream find_client(const uint32_t id) {
+client_stream find_client(const uint16_t id) {
 	client_t *client = NULL;
 	client_stream cs = {};
 
