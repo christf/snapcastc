@@ -26,7 +26,7 @@ void strcopy_from_json(char **dest, json_object *jobj) {
 	int len = strlen(json_object_to_json_string_ext(jobj, 0)) ;
 	*dest = snap_alloc(len - 1);
 	strncpy(*dest, &json_object_to_json_string_ext(jobj, 0)[1], len - 2);
-	dest[len - 2] = '\0';
+	(*dest)[len - 2] = '\0';
 }
 
 bool jsonrpc_parse_string(jsonrpc_request *result, const char *line) {
