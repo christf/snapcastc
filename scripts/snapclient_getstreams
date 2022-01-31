@@ -11,6 +11,6 @@ port=1705
 if [ $# -eq 1 ]; then
   (echo  "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Server.GetStatus}\"}}"; sleep 1 ) | telnet $server $port| sed '1,3d'| jq ".result.server.groups[].name"
 elif [ $# -eq 2 ]; then
-  (echo  "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Server.GetStatus}\"}}"; sleep 1 ) | telnet $server $port| sed '1,3d'| jq ".result.server.groups[] | select(.clients[].id==$clientid) | .name"
+  (echo  "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Server.GetStatus}\"}}"; sleep 1 ) | telnet $server $port| sed '1,3d'| jq -r ".result.server.groups[] | select(.clients[].id==$clientid) | .name"
 fi
 

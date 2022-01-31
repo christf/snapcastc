@@ -273,12 +273,15 @@ bool handle_client_setstream(jsonrpc_request *request, int fd) {
 				log_error("received stream change request for unknown client %d\n", clientid);
 				break;
 			}
+			log_verbose("Setting stream for client %d\n", clientid);
 		} else if (!strncmp(p->name, "stream_id", 9)) {
 			newstream = stream_find_name(p->value.string);
 			if (newstream) {
 				free(target_stream_id);
-				target_stream_id = snap_alloc(strlen(p->value.string));
-				strncpy(target_stream_id, p->value.string, strlen(p->value.string));
+				int len = strlen(p->value.string);
+				target_stream_id = snap_alloc(len + 1);
+				strncpy(target_stream_id, p->value.string, len);
+				target_stream_id[len] = '\0';
 			} else {
 				free(target_stream_id);
 				log_error("received stream change request for unknown stream %s\n", p->value.string);
@@ -341,12 +344,10 @@ bool handle_client_setvolume(jsonrpc_request *request, int fd) {
 
 			if (vol_percent) {
 				volume_int = json_object_get_int(vol_percent);
-				json_object_put(vol_percent);
 			}
 
 			if (mute) {
 				muted = json_object_get_boolean(mute);
-				json_object_put(mute);
 			}
 
 			json_object_put(jobj);
@@ -381,10 +382,10 @@ int handle_request(jsonrpc_request *request, int fd) {
 	if (!strncmp(request->method, "Server.GetRPCVersion", 20)) {
 		handle_GetRPCVersion(request, fd);
 	} else if (!strncmp(request->method, "Client.SetStream", 16)) {
-		log_debug("calling server Client.SetStream\n");
+		log_debug("calling Client.SetStream\n");
 		handle_client_setstream(request, fd);
 	} else if (!strncmp(request->method, "Client.SetVolume", 16)) {
-		log_debug("calling server Client.SetVolume\n");
+		log_debug("calling Client.SetVolume\n");
 		handle_client_setvolume(request, fd);
 	} else if (!strncmp(request->method, "Server.GetStatus", 16)) {
 		log_debug("calling server getstatus\n");
