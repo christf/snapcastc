@@ -273,12 +273,15 @@ bool handle_client_setstream(jsonrpc_request *request, int fd) {
 				log_error("received stream change request for unknown client %d\n", clientid);
 				break;
 			}
+			log_verbose("Setting stream for client %d\n", clientid);
 		} else if (!strncmp(p->name, "stream_id", 9)) {
 			newstream = stream_find_name(p->value.string);
 			if (newstream) {
 				free(target_stream_id);
-				target_stream_id = snap_alloc(strlen(p->value.string));
-				strncpy(target_stream_id, p->value.string, strlen(p->value.string));
+				int len = strlen(p->value.string);
+				target_stream_id = snap_alloc(len + 1);
+				strncpy(target_stream_id, p->value.string, len);
+				target_stream_id[len] = '\0';
 			} else {
 				free(target_stream_id);
 				log_error("received stream change request for unknown stream %s\n", p->value.string);
