@@ -290,7 +290,8 @@ bool handle_client_setstream(jsonrpc_request *request, int fd) {
 			stream_client_add(newstream, client);
 			stream_client_remove(current_stream, client);
 		}
-		json_object_object_add(response, "result", json_object_new_string(newstream->name));
+		json_object_object_add(result, "stream", json_object_new_string(newstream->name));
+		json_object_object_add(result, "client", json_object_new_int(client->id));
 	}
 	jsonrpc_buildresult(response, request->id, result);
 	json_object_print_and_put(fd, response);
