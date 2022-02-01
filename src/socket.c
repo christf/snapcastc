@@ -180,8 +180,8 @@ void json_build_serverstatus_streams(json_object *in) {
 
 		json_object_array_add(streams, stream);
 
-		json_object_object_add(in, "streams", streams);  // streams - this is at the very least poorly named
 	}
+	json_object_object_add(in, "streams", streams);  // streams - this is at the very least poorly named
 }
 
 void json_build_serverstatus_server(json_object *in) {
@@ -260,7 +260,6 @@ bool handle_client_setstream(jsonrpc_request *request, int fd) {
 	json_object *response = json_object_new_object();
 	json_object *result = json_object_new_object();
 	int clientid = 0;
-	char *target_stream_id = NULL;
 	client_t *client = NULL;
 	stream *newstream = NULL;
 
@@ -276,33 +275,26 @@ bool handle_client_setstream(jsonrpc_request *request, int fd) {
 			log_verbose("Setting stream for client %d\n", clientid);
 		} else if (!strncmp(p->name, "stream_id", 9)) {
 			newstream = stream_find_name(p->value.string);
-			if (newstream) {
-				free(target_stream_id);
-				int len = strlen(p->value.string);
-				target_stream_id = snap_alloc(len + 1);
-				strncpy(target_stream_id, p->value.string, len);
-				target_stream_id[len] = '\0';
-			} else {
-				free(target_stream_id);
+			if (!newstream) {
 				log_error("received stream change request for unknown stream %s\n", p->value.string);
 				break;
 			}
 		}
 	}
 
-	if (client) {
+	if ((client) && (newstream)) {
 		stream *current_stream = stream_find(client);
-		bool client_stream_is_changed = !!strncmp(current_stream->name, target_stream_id, strlen(current_stream->name));
+		bool client_stream_is_changed = !!strncmp(current_stream->name, newstream->name, strlen(current_stream->name));
 		if (client_stream_is_changed) {
 			intercom_stop_client(&snapctx.intercom_ctx, client);
-			stream_client_remove(current_stream, client);
 			stream_client_add(newstream, client);
+			stream_client_remove(current_stream, client);
 		}
-		json_object_object_add(response, "result", json_object_new_string(target_stream_id));
+		json_object_object_add(result, "stream", json_object_new_string(newstream->name));
+		json_object_object_add(result, "client", json_object_new_int(client->id));
 	}
 	jsonrpc_buildresult(response, request->id, result);
 	json_object_print_and_put(fd, response);
-	free(target_stream_id);
 	return true;
 }
 
