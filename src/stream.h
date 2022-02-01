@@ -11,9 +11,6 @@
 enum codec { PCM = 1, OPUS, INVALID };
 enum protocol { PIPE = 1 };
 
-// this will be used in the client for decoding
-opuscodec_ctx opuscodec;
-
 typedef struct {
 	int efd;
 	int fd;
