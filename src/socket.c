@@ -180,8 +180,8 @@ void json_build_serverstatus_streams(json_object *in) {
 
 		json_object_array_add(streams, stream);
 
-		json_object_object_add(in, "streams", streams);  // streams - this is at the very least poorly named
 	}
+	json_object_object_add(in, "streams", streams);  // streams - this is at the very least poorly named
 }
 
 void json_build_serverstatus_server(json_object *in) {
