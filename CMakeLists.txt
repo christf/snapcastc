@@ -24,7 +24,7 @@ endif(ALSA_FOUND)
 
 
 # see #68
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fcommon")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 
 if (WITH_ASAN)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")

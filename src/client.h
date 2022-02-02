@@ -2,6 +2,7 @@
 
 #include "taskqueue.h"
 #include "vector.h"
+#include "opuscodec.h"
 
 #include <netdb.h>
 #include <netinet/in.h>
@@ -26,6 +27,7 @@ typedef struct client {
 
 	taskqueue_t *purge_task;
 } client_t;
+opuscodec_ctx opuscodec;
 
 typedef VECTOR(struct client) client_vector;
 
