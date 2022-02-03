@@ -27,7 +27,7 @@ typedef struct client {
 
 	taskqueue_t *purge_task;
 } client_t;
-opuscodec_ctx opuscodec;
+static opuscodec_ctx opuscodec;
 
 typedef VECTOR(struct client) client_vector;
 
