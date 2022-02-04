@@ -59,8 +59,8 @@ node {
       },
       'PackageARM': {
 	sh "mkdir -p deb/raspbian"
-	sh "ssh pi@raspbmc 'rm -rf /tmp/snapcastc; cd /tmp; git clone https://github.com/christf/snapcastc.git; mkdir snapcastc/build; cd snapcastc/build $INCREMENTCOMMAND &&../scripts/make_debian_package'"
-	sh "scp 'pi@raspbmc:/tmp/snapcastc_*.deb' deb/raspbian; ssh pi@raspbmc 'rm -rf /tmp/snapcastc*'"
+	sh "ssh pi@wohnzimmer 'rm -rf /tmp/snapcastc; cd /tmp; git clone https://github.com/christf/snapcastc.git; mkdir snapcastc/build; cd snapcastc/build $INCREMENTCOMMAND &&../scripts/make_debian_package'"
+	sh "scp 'pi@wohnzimmer:/tmp/snapcastc_*.deb' deb/raspbian; ssh pi@wohnzimmer 'rm -rf /tmp/snapcastc*'"
       }
     )
   }
