@@ -30,11 +30,11 @@ node {
       sh "pwd > workspace"
       WORKSPACE = readFile('workspace').trim()
       PROJECTDIR = "snapcastc"
-      sh "rm -rf deb; mkdir deb"
+      sh "rm -rf deb build; mkdir deb"
   }
   stage('Build') {
     if (isUnix()) {
-      sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /bin/sh -c 'mkdir -p /$PROJECTDIR/build && cd /$PROJECTDIR/build && cmake -DCMAKE_BUILD_TYPE=$RELEASETYPE .. && make -j5'"
+      sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /bin/sh -c 'rm -rf /$PROJECTDIR/build; mkdir -p /$PROJECTDIR/build && cd /$PROJECTDIR/build && cmake -DCMAKE_BUILD_TYPE=$RELEASETYPE .. && make -j5'"
     }
   }
   stage('Test') {
