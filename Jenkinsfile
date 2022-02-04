@@ -38,8 +38,16 @@ node {
     }
   }
   stage('Test') {
-    sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /$PROJECTDIR/build/src/snapcast-test-client > testlog 2>&1"
-    sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /$PROJECTDIR/build/src/snapcast-test-srv >> testlog 2>&1"
+	parallel (
+		'Test Client': {
+			sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /$PROJECTDIR/build/src/snapcast-test-client > testlog-client 2>&1"
+			sh "cat testlog-client"
+		},
+		'Test Server': {
+			sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /$PROJECTDIR/build/src/snapcast-test-srv > testlog-srv 2>&1"
+			sh "cat testlog-srv"
+		}
+	)
   }
   stage('Package') {
     parallel (
