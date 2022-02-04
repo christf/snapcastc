@@ -66,8 +66,8 @@ node {
   }
   
   stage('Upload') {
-    sh "package_cloud push christf/dev/debian/stretch deb/debian/*.deb"
-    sh "package_cloud push christf/dev/raspbian/stretch deb/raspbian/*.deb"
+    sh "/usr/local/bin/package_cloud push christf/dev/debian/bullseye deb/debian/*.deb"
+    sh "/usr/local/bin/package_cloud push christf/dev/raspbian/bullseye deb/raspbian/*.deb"
   }
   stage('Results') {
     archiveArtifacts 'deb/*/*.deb'
