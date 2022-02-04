@@ -34,7 +34,7 @@ node {
   }
   stage('Build') {
     if (isUnix()) {
-      sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /bin/sh -c 'rm -rf /$PROJECTDIR/build; mkdir -p /$PROJECTDIR/build && cd /$PROJECTDIR/build && cmake -DCMAKE_BUILD_TYPE=$RELEASETYPE .. && make -j5'"
+      sh "docker run -u `id -u $USER` -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /bin/sh -c 'rm -rf /$PROJECTDIR/build; mkdir -p /$PROJECTDIR/build && cd /$PROJECTDIR/build && cmake -DCMAKE_BUILD_TYPE=$RELEASETYPE .. && make -j5'"
     }
   }
   stage('Test') {
