@@ -30,17 +30,24 @@ node {
       sh "pwd > workspace"
       WORKSPACE = readFile('workspace').trim()
       PROJECTDIR = "snapcastc"
-      sh "rm -rf deb; mkdir deb"
+      sh "rm -rf deb build; mkdir deb"
   }
   stage('Build') {
     if (isUnix()) {
-      sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /bin/sh -c 'mkdir -p /$PROJECTDIR/build && cd /$PROJECTDIR/build && cmake -DCMAKE_BUILD_TYPE=$RELEASETYPE .. && make -j5'"
+      sh "docker run -u `id -u $USER` -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /bin/sh -c 'rm -rf /$PROJECTDIR/build; mkdir -p /$PROJECTDIR/build && cd /$PROJECTDIR/build && cmake -DCMAKE_BUILD_TYPE=$RELEASETYPE .. && make -j5'"
     }
   }
   stage('Test') {
-    sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /$PROJECTDIR/build/src/snapcast-test-client > testlog 2>&1"
-    sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /$PROJECTDIR/build/src/snapcast-test-server > testlog 2>&1"
-    sh "cat testlog"
+	parallel (
+		'Test Client': {
+			sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /$PROJECTDIR/build/src/snapcast-test-client > testlog-client 2>&1"
+			sh "cat testlog-client"
+		},
+		'Test Server': {
+			sh "docker run -v $WORKSPACE:/$PROJECTDIR -a STDIN -a STDOUT -a STDERR snapcastc-build /$PROJECTDIR/build/src/snapcast-test-srv > testlog-srv 2>&1"
+			sh "cat testlog-srv"
+		}
+	)
   }
   stage('Package') {
     parallel (
@@ -52,15 +59,15 @@ node {
       },
       'PackageARM': {
 	sh "mkdir -p deb/raspbian"
-	sh "ssh pi@raspbmc 'rm -rf /tmp/snapcastc; cd /tmp; git clone https://github.com/christf/snapcastc.git; mkdir snapcastc/build; cd snapcastc/build $INCREMENTCOMMAND &&../scripts/make_debian_package'"
-	sh "scp 'pi@raspbmc:/tmp/snapcastc_*.deb' deb/raspbian; ssh pi@raspbmc 'rm -rf /tmp/snapcastc*'"
+	sh "ssh pi@wohnzimmer 'rm -rf /tmp/snapcastc; cd /tmp; git clone https://github.com/christf/snapcastc.git; mkdir snapcastc/build; cd snapcastc/build $INCREMENTCOMMAND &&../scripts/make_debian_package'"
+	sh "scp 'pi@wohnzimmer:/tmp/snapcastc_*.deb' deb/raspbian; ssh pi@wohnzimmer 'rm -rf /tmp/snapcastc*'"
       }
     )
   }
   
   stage('Upload') {
-    sh "package_cloud push christf/dev/debian/stretch deb/debian/*.deb"
-    sh "package_cloud push christf/dev/raspbian/stretch deb/raspbian/*.deb"
+    sh "/usr/local/bin/package_cloud push christf/dev/debian/bullseye deb/debian/*.deb"
+    sh "/usr/local/bin/package_cloud push christf/dev/raspbian/bullseye deb/raspbian/*.deb"
   }
   stage('Results') {
     archiveArtifacts 'deb/*/*.deb'
