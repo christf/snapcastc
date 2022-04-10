@@ -194,7 +194,7 @@ void alsaplayer_handle(alsaplayer_ctx *ctx) {
 	else {
 		chunk = *ctx->overflow;
 		ret = chunk.size;
-		log_debug("writing %d overflow bytes (%d frames) to PCM %d\n", chunk.size, chunk.size / chunk.channels / chunk.frame_size);
+		log_debug("writing %d overflow bytes (%d frames) to PCM\n", chunk.size, chunk.size / chunk.channels / chunk.frame_size);
 	}
 
 	if (ret == 0) {

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(snapcast C)
 
-option(WITH_ASAN "Enable ASAN (address sanitizer)" OFF)
+option(WITH_ASAN "Enable ASAN (address sanitizer)" ON)
 
 find_path(JSON_C_INCLUDE_DIR NAMES json-c/json.h HINTS ${_JSON_C_INCLUDE_DIRS})
 find_library(JSON_C_LIBRARIES NAMES json-c HINTS ${_JSON_C_LIBRARY_DIRS})
