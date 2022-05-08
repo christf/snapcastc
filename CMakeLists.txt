@@ -27,8 +27,8 @@ endif(ALSA_FOUND)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 
 if (WITH_ASAN)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -static-libasan -fno-omit-frame-pointer")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -static-libasan -fno-omit-frame-pointer")
 endif (WITH_ASAN)
 
 set(CMAKE_MODULE_PATH ${snapcastc_SOURCE_DIR})
