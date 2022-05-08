@@ -16,54 +16,46 @@ struct timespec timeAdd(const struct timespec *t1, const struct timespec *t2) {
 }
 
 int timespec_isnear(const struct timespec *t1, const struct timespec *t2, const int chunkms) {
-	struct timespec tmp;
+	struct timespec tmp, tmp1;
+	int status = 0;
 
-	tmp = *t1;
-	log_debug("isnear:  t1: %s, tmp: %s\n", print_timespec(t1), print_timespec(&tmp));
-	tmp = timeAddMs(t1, chunkms);
+	tmp = timeSub(t1, t2).time;
+	tmp1 = timeAddMs ( &(struct timespec) { .tv_sec = 0, .tv_nsec = 0 }, chunkms);
 
-	if ((timespec_cmp(*t2, tmp) <= 0) && (timespec_cmp(*t2, *t1) >= 0)) {
-		log_debug("isnear: YES+  t1: %s, t2: %s\n", print_timespec(t1), print_timespec(t2));
-		return 1;
+	if (timespec_cmp( &tmp1, &tmp) >= 0 ) {
+		status = 1;
 	}
 
-	tmp = timeSubMs(t1, chunkms);
-
-	if (timespec_cmp(*t2, tmp) >= 0 && timespec_cmp(*t2, *t1) <= 0) {
-		log_debug("isnear: YES-  t1: %s, t2: %s\n", print_timespec(t1), print_timespec(t2));
-		return 1;
-	}
-
-	log_debug("isnear: NO  t1: %s, t2: %s\n", print_timespec(t1), print_timespec(t2));
-	return 0;
+	log_debug("isnear: %s  t1: %s, t2: %s, interval: %d, difference: %s\n", status ? "YES": "NO",  print_timespec(t1), print_timespec(t2), chunkms, print_timespec(&tmp));
+	return status;
 }
 
 timediff timeSub(const struct timespec *t1, const struct timespec *t2) {
 	timediff ret;
-	struct timespec *it1 = (struct timespec *)t1;
-	struct timespec *it2 = (struct timespec *)t2;
+	const struct timespec *it1;
+	const struct timespec *it2;
 
-	ret.sign = 1;
-
-	if (timespec_cmp(*t1, *t2) < 0) {
-		it1 = (struct timespec *)t2;
-		it2 = (struct timespec *)t1;
+	if (timespec_cmp(t1, t2) < 0) {
+		it1 = t2;
+		it2 = t1;
 		ret.sign = -1;
-	}  // now t1 is always greater than t2
-
-	uint64_t tdiff_sec = it1->tv_sec - it2->tv_sec;
-	uint64_t tdiff_nsec = 0;
-	if (it1->tv_nsec >= it2->tv_nsec) {
-		tdiff_nsec = it1->tv_nsec - it2->tv_nsec;
-	} else {
-		tdiff_sec--;
-		tdiff_nsec = 1000000000UL - it2->tv_nsec + it1->tv_nsec;
+	}
+	else {
+		it1 = t1;
+		it2 = t2;
+		ret.sign = 1;
 	}
 
-	ret.time.tv_sec = tdiff_sec;
-	ret.time.tv_nsec = tdiff_nsec;
+      	// now it1 is always greater than it2
 
-	log_debug("sub:  t1: %s, t2: %s ret: %s sign: %d\n", print_timespec(t1), print_timespec(t2), print_timespec(&ret.time), ret.sign);
+	ret.time.tv_sec = it1->tv_sec - it2->tv_sec;
+
+	if (it1->tv_nsec >= it2->tv_nsec) {
+		ret.time.tv_nsec = it1->tv_nsec - it2->tv_nsec;
+	} else {
+		ret.time.tv_sec--;
+		ret.time.tv_nsec = BILLION - it2->tv_nsec + it1->tv_nsec;
+	}
 
 	return ret;
 }
@@ -82,15 +74,16 @@ struct timespec timeAddMs(const struct timespec *t1, const int ms) {
 	return timeAdd(t1, &t2);
 }
 
-int timespec_cmp(const struct timespec a, const struct timespec b) {
-	if (a.tv_sec < b.tv_sec)
+int timespec_cmp(const struct timespec *a, const struct timespec *b) {
+	if (a->tv_sec < b->tv_sec)
 		return -1;
-	else if (a.tv_sec > b.tv_sec)
+	else if (a->tv_sec > b->tv_sec)
 		return +1;
-	else if (a.tv_nsec < b.tv_nsec)
+	else if (a->tv_nsec < b->tv_nsec)
 		return -1;
-	else if (a.tv_nsec > b.tv_nsec)
+	else if (a->tv_nsec > b->tv_nsec)
 		return +1;
 
 	return 0;
 }
+

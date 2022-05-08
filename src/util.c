@@ -122,6 +122,7 @@ const char *print_chunk(pcmChunk *chunk) {
 }
 
 void print_packet(unsigned char *buf, int size) {
+	return;
 	if (!snapctx.debug)
 		return;
 

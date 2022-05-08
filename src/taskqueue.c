@@ -95,7 +95,7 @@ bool reschedule_task(taskqueue_ctx *ctx, taskqueue_t *task, time_t timeout, long
 
 	struct timespec due = settime(timeout, millisecs);
 
-	if (timespec_cmp(due, task->due)) {
+	if (timespec_cmp(&due, &task->due)) {
 		task->due = due;
 		taskqueue_remove(task);
 		taskqueue_insert(&ctx->queue, task);
@@ -132,7 +132,7 @@ void taskqueue_run(taskqueue_ctx *ctx) {
 	if (ctx->queue == NULL)
 		return;
 
-	while (ctx->queue && timespec_cmp(ctx->queue->due, now) <= 0) {
+	while (ctx->queue && timespec_cmp(&(ctx->queue->due), &now) <= 0) {
 		taskqueue_t *task = ctx->queue;
 		log_debug("The time is now: %s, running task that was due at %s\n", print_timespec(&now), print_timespec(&task->due));
 		taskqueue_remove(task);
@@ -187,7 +187,7 @@ static taskqueue_t *taskqueue_merge(taskqueue_t *queue1, taskqueue_t *queue2) {
 
 	taskqueue_t *lo, *hi;
 
-	if (timespec_cmp(queue1->due, queue2->due) < 0) {
+	if (timespec_cmp(&queue1->due, &queue2->due) < 0) {
 		lo = queue1;
 		hi = queue2;
 	} else {

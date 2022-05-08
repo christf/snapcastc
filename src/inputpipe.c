@@ -60,7 +60,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 
 	struct timespec bufferfull = timeAddMs(&ctime, snapctx.bufferms * 95 / 100);
 	struct timespec lastchunk_play_at = chunk_get_play_at(&ctx->chunk);
-	bool buffer_full = (timespec_cmp(lastchunk_play_at, bufferfull) > 0);
+	bool buffer_full = (timespec_cmp(&lastchunk_play_at, &bufferfull) > 0);
 
 	if (buffer_full)
 		return -1;
@@ -75,7 +75,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 	} else if ((count > 0) && (ctx->state == IDLE)) {
 		struct timespec start_playing_at;
 
-		if (timespec_cmp(ctime, chunk_get_play_at(&ctx->chunk)) > 0) {
+		if (timespec_cmp(&ctime, &lastchunk_play_at) > 0) {
 			start_playing_at = timeAddMs(&ctime, COLD_START_OFFSET_MS);
 			log_verbose("Detected status change, resyncing timestamps. This will be audible.\n", ctx->state);
 		} else {
@@ -101,7 +101,7 @@ int inputpipe_handle(inputpipe_ctx *ctx) {
 		int ret = 1;
 		struct timespec play_at = chunk_get_play_at(&ctx->chunk);
 
-		if (timespec_cmp(ctime, play_at) > 0) {
+		if (timespec_cmp(&ctime, &play_at) > 0) {
 			log_verbose(
 			    "Either this is the first chunk we read for the first client on an inputstream or we are horribly late when reading from "
 			    "the pipes. Using current timestamp to play back current chunk.");

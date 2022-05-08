@@ -331,20 +331,22 @@ void remove_old_data_from_receivebuffer(intercom_ctx *ctx) {
 	struct timespec ctime;
 
 	pcmChunk *oldest = pqueue_peek(ctx->receivebuffer);
+	obtainsystime(&ctime);
+
 	if (oldest) {
-		obtainsystime(&ctime);
 		oldest_play_at = chunk_get_play_at(oldest);
-		while (oldest && oldest_play_at.tv_sec && timespec_cmp(ctime, oldest_play_at) > 0) {
-			log_verbose("removing old chunk\n");
+		while (oldest && oldest_play_at.tv_sec && timespec_cmp(&ctime, &oldest_play_at) > 0) {
 			pcmChunk *p = pqueue_dequeue(ctx->receivebuffer);
 			chunk_free_members(p);
 			free(p);
 			pcmChunk *oldest = pqueue_peek(ctx->receivebuffer);
 			oldest_play_at = chunk_get_play_at(oldest);
+			log_verbose("queue size %d/%d, oldest chunk in queue to be played at %s, current time %s\n", ctx->receivebuffer->size,
+					ctx->receivebuffer->capacity, oldest ? print_timespec(&oldest_play_at) : 0, print_timespec(&ctime));
 		}
 	}
 	log_debug("queue size %d/%d, oldest chunk in queue to be played at %s, current time %s\n", ctx->receivebuffer->size,
-		  ctx->receivebuffer->capacity, oldest ? print_timespec(&oldest_play_at) : 0, oldest ? print_timespec(&ctime) : 0);
+			ctx->receivebuffer->capacity, oldest ? print_timespec(&oldest_play_at) : 0, print_timespec(&ctime));
 }
 
 void intercom_put_chunk(intercom_ctx *ctx, pcmChunk *chunk) {
@@ -404,7 +406,7 @@ bool intercom_handle_audio(intercom_ctx *ctx, intercom_packet_audio *packet, int
 	struct timespec ctime;
 	obtainsystime(&ctime);
 
-	if (timespec_cmp(play_at, ctime) > 0) {
+	if (timespec_cmp(&play_at, &ctime) > 0) {
 		if (!is_next_chunk(this_seqno)) {
 			bool is_chunk_retransmit = this_seqno < ctx->lastreceviedseqno;
 			bool is_chunk_far_in_future = (!is_chunk_retransmit) && this_seqno - ctx->lastreceviedseqno >= ctx->receivebuffer->capacity;

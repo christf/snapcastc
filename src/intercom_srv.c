@@ -67,7 +67,7 @@ void remove_old_audiodata_task(void *data) {
 
 		free(ap->data);
 		VECTOR_DELETE(s->packet_buffer, 0);  // always remove the oldest element
-	} while (VECTOR_LEN(s->packet_buffer) && timespec_cmp(age, play_at) > 0);
+	} while (VECTOR_LEN(s->packet_buffer) && timespec_cmp(&age, &play_at) > 0);
 }
 
 int assemble_volume(uint8_t *packet, uint8_t volume) {
