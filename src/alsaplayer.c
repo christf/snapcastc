@@ -128,7 +128,7 @@ int getchunk(pcmChunk *p, size_t delay_frames) {
 		tdiff = timeSub(&ts_alsa_ready, &nextchunk_playat);
 
 		is_near = timespec_isnear(&ts_alsa_ready, &nextchunk_playat, NEAR_MS);
-		is_close = timespec_isnear(&ts_alsa_ready, &nextchunk_playat, NOT_EVEN_CLOSE_MS);
+		is_close = is_near || timespec_isnear(&ts_alsa_ready, &nextchunk_playat, NOT_EVEN_CLOSE_MS);
 		attempting_start_and_overshot = ((!snapctx.alsaplayer_ctx.playing) && (timespec_cmp(&ts_alsa_ready, &nextchunk_playat) >= 0));
 
 		chunk_is_in_past = (tdiff.sign > 0 && !is_near && !attempting_start_and_overshot);
