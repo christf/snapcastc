@@ -339,7 +339,7 @@ void remove_old_data_from_receivebuffer(intercom_ctx *ctx) {
 		obtainsystime(&ctime);
 		oldest_play_at = chunk_get_play_at(oldest);
 		while (oldest && oldest_play_at.tv_sec && timespec_cmp(ctime, oldest_play_at) > 0) {
-			log_verbose("removing old chunk\n");
+			log_verbose("removing old chunk. current time: %s, chunktime: %s\n", print_timespec(&ctime), print_timespec(&oldest_play_at));
 			pcmChunk *p = pqueue_dequeue(ctx->receivebuffer);
 			chunk_free_members(p);
 			free(p);
