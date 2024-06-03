@@ -1,6 +1,7 @@
 #include "util.h"
 #include "error.h"
 #include "snapcast.h"
+#include "syscallwrappers.h"
 
 #include <time.h>
 
@@ -35,6 +36,10 @@ const char *print_timespec(const struct timespec *t) {
 }
 
 void log_error(const char *format, ...) {
+	struct timespec ctime;
+	obtainsystime(&ctime);
+	fprintf(stderr, "%s: ", print_timespec(&ctime));
+
 	va_list args;
 	va_start(args, format);
 	vfprintf(stderr, format, args);
@@ -44,6 +49,10 @@ void log_error(const char *format, ...) {
 void log_debug(const char *format, ...) {
 	if (!snapctx.debug)
 		return;
+	struct timespec ctime;
+	obtainsystime(&ctime);
+	fprintf(stderr, "%s: ", print_timespec(&ctime));
+
 	va_list args;
 	va_start(args, format);
 	vfprintf(stderr, format, args);
@@ -53,6 +62,10 @@ void log_debug(const char *format, ...) {
 void log_verbose(const char *format, ...) {
 	if (!snapctx.verbose)
 		return;
+	struct timespec ctime;
+	obtainsystime(&ctime);
+	fprintf(stderr, "%s: ", print_timespec(&ctime));
+
 	va_list args;
 	va_start(args, format);
 	vfprintf(stderr, format, args);
