@@ -112,7 +112,7 @@ int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
 void hello_task(void *d) {
 	log_verbose("saying hello to server\n");
 	struct intercom_task *data = d;
-
+/*
 	struct in6_addr tmp_serverip = {};
 	obtain_ip_from_name(snapctx.servername, &tmp_serverip);
 	if (memcmp(&tmp_serverip, data->recipient, sizeof(struct in6_addr))) {
@@ -123,7 +123,7 @@ void hello_task(void *d) {
 		intercom_reinit(ictx);
 		return;
 	}
-
+*/
 	intercom_packet_hello *hello = (intercom_packet_hello *)data->packet;
 
 	hello->hdr.nonce = get_nonce(&nonce);
