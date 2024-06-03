@@ -1,3 +1,6 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "intercom_client.h"
 #include "alloc.h"
 #include "alsaplayer.h"
@@ -6,6 +9,8 @@
 #include "syscallwrappers.h"
 #include "timespec.h"
 #include "util.h"
+
+#include <netdb.h>
 
 extern uint32_t nonce;
 #define REQUEST_RETRY_INTERVAL_MS 100
@@ -73,55 +78,54 @@ int assemble_hello(uint8_t *packet) {
 	return packet[1];
 }
 
-int obtain_ip_from_name(const char *hostname, struct in6_addr *addr) {
-	struct addrinfo hints = {};
-	struct addrinfo *result = NULL, *rp;
-	int s, sfd;
+static struct gaicb *dns_req[1];
 
-	hints.ai_family = AF_INET6;
-	hints.ai_socktype = SOCK_DGRAM;
-	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
-	hints.ai_protocol = 0;
 
-	s = getaddrinfo(hostname, NULL, &hints, &result);
-	if (s != 0) {
-		exit_errno("getaddrinfo: could not resolve host %s, getaddrinfo failed", hostname);
-	}
-
-	for (rp = result; rp != NULL; rp = rp->ai_next) {
-		sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-		if (sfd == -1)
-			continue;
-
-		struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)result->ai_addr;
-		memcpy(&addr->s6_addr, &s6->sin6_addr, sizeof(struct in6_addr));
-		close(sfd);
-		break;
-	}
-	if (rp == NULL) {
-		exit_error("could not connect to host %s\n", hostname);
-	}
-
-	log_debug("resolved %s to %s\n", hostname, print_ip(addr));
-
-	freeaddrinfo(result);
-	return 0;
+int obtain_ip_from_getaddr(struct in6_addr *res)
+{
+		struct addrinfo *resi =  dns_req[0]->ar_result;
+		struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)resi->ai_addr;
+		memcpy(res->s6_addr, &s6->sin6_addr, sizeof(struct in6_addr));
+		freeaddrinfo(dns_req[0]->ar_result);
+		dns_req[0]->ar_result = NULL;
+		log_verbose("resolution result: %s\n", print_ip(res));
 }
-
 
 void hello_task(void *d) {
 	log_verbose("saying hello to server\n");
 	struct intercom_task *data = d;
+	intercom_ctx *ictx = data->ctx;
+	int ret;
 
-	struct in6_addr tmp_serverip = {};
-	obtain_ip_from_name(snapctx.servername, &tmp_serverip);
-	if (memcmp(&tmp_serverip, data->recipient, sizeof(struct in6_addr))) {
-		log_error("IP address of server changed from %s to %s\n", print_ip(data->recipient), print_ip(&tmp_serverip));
-		intercom_ctx *ictx = data->ctx;
-		intercom_uninit(ictx);
-		alsaplayer_uninit(&snapctx.alsaplayer_ctx);
-		intercom_reinit(ictx);
-		return;
+	ret = gai_error(dns_req[0]);
+	switch (ret) {
+	case EAI_INPROGRESS:
+		break;
+	case EAI_CANCELED:
+		break;
+	case 0:
+		struct in6_addr addr;
+		obtain_ip_from_getaddr(&addr);
+		if (memcmp(&addr, data->recipient, sizeof(struct in6_addr))) {
+			log_error("IP address of server changed from %s to %s\n", print_ip(data->recipient), print_ip(&addr));
+			intercom_ctx *ictx = data->ctx;
+			intercom_uninit(ictx);
+			alsaplayer_uninit(&snapctx.alsaplayer_ctx);
+			intercom_reinit(ictx);
+			return;
+		}
+
+	default:
+		if (!!ret) {
+			log_error("could not resolve host %s, getaddrinfo failed: %s\n", snapctx.servername, gai_strerror(ret));
+		}
+
+		log_verbose("starting new dns resolution attempt of %s\n", dns_req[0]->ar_name);
+		int tmp = getaddrinfo_a(GAI_NOWAIT, dns_req, 1, NULL);
+		if (tmp) {
+			log_error("getaddrinfo_a() failed: %s\n", gai_strerror(tmp));
+		}
+		break;
 	}
 
 	intercom_packet_hello *hello = (intercom_packet_hello *)data->packet;
@@ -504,7 +508,18 @@ void intercom_reinit(void *d) {
 	VECTOR_INIT(ctx->recent_packets);
 	VECTOR_INIT(ctx->missing_packets);
 
-	obtain_ip_from_name(snapctx.servername, &ctx->serverip);
+	int tmp = getaddrinfo_a(GAI_WAIT, dns_req, 1, NULL);
+	if (tmp) {
+		log_error("getaddrinfo_a() failed: %s\n", gai_strerror(tmp));
+	}
+	if (! gai_error(dns_req[0]))
+		obtain_ip_from_getaddr(&ctx->serverip);
+	else
+		exit_error("unable to resolve server %s\n", snapctx.servername);
+	tmp = getaddrinfo_a(GAI_NOWAIT, dns_req, 1, NULL);
+	if (tmp) {
+		log_error("getaddrinfo_a() failed: %s\n", gai_strerror(tmp));
+	}
 
 	ctx->fd = socket(PF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0);
 	if (ctx->fd < 0)
@@ -545,6 +560,15 @@ void intercom_uninit(intercom_ctx *ctx) {
 
 void intercom_init(intercom_ctx *ctx) {
 	obtainrandom(&nonce, sizeof(uint32_t), 0);
+	dns_req[0] = calloc(1, sizeof(*dns_req[0]));
+	dns_req[0]->ar_name = strdup(snapctx.servername);
+	dns_req[0]->ar_request = calloc(1, sizeof(struct addrinfo));
+	struct addrinfo hints = {};
+	hints.ai_family = AF_INET6;
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+	hints.ai_protocol = 0;
+	memcpy((struct addrinfo*)dns_req[0]->ar_request, &hints, sizeof(hints));
 
 	intercom_reinit(ctx);
 }
