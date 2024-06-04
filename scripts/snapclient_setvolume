@@ -7,4 +7,4 @@ clientid=$1
 volume=$2
 server=$3
 port=1705
-(echo "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Client.SetVolume\",\"params\":{\"id\":$clientid, \"volume\":{\"muted\":false, \"percent\":$volume}}}";) | telnet $server $port| sed '1,3d'| jq .
+(echo "{\"id\":$RANDOM,\"jsonrpc\":\"2.0\",\"method\":\"Client.SetVolume\",\"params\":{\"id\":$clientid, \"volume\":{\"muted\":false, \"percent\":$volume}}}";sleep 1) | telnet $server $port| sed '1,3d'| jq .
