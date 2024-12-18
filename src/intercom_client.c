@@ -71,7 +71,7 @@ int assemble_hello(uint8_t *packet) {
 	packet[1] = 9;
 	uint16_t s_tmp = htons(snapctx.intercom_ctx.nodeid);
 	memcpy(&packet[2], &s_tmp, sizeof(uint16_t));
-	log_error("nodeid: %zu\n", snapctx.intercom_ctx.nodeid);
+	log_verbose("nodeid: %zu\n", snapctx.intercom_ctx.nodeid);
 	uint32_t n_tmp = htonl(snapctx.alsaplayer_ctx.latency_ms);
 	memcpy(&packet[4], &n_tmp, sizeof(uint32_t));
 	packet[8] = obtain_volume(&snapctx.alsaplayer_ctx);
