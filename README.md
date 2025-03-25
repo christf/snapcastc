@@ -204,6 +204,7 @@ Of course, this can be used to build SnapCastC on your own infrastructure.
     
 ### Build
 
+#### Debian
     apt install cmake libsoxr-dev librubberband-dev libasound2-dev libopus-dev build-essential git libjson-c-dev
 
 in the root of this project, run:
@@ -215,6 +216,18 @@ make -j5
 make install
 ```
 to build and install the program.
+
+#### Docker
+
+```
+docker build -t snapcastc-builder:latest .
+rm -rf build
+mkdir build
+docker run -v ~/Programmierung/snapcastc:/mnt/ snapcastc:0.0.0 sh -c "cd /mnt/build; cmake ..; make"
+```
+
+After this, you can find the binaries in ./build/src/
+
 
 ## Communication Protocol
 
