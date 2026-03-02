@@ -1,4 +1,4 @@
-FROM debian:12.10-slim
+FROM debian:13.2-slim
 
 # ENV BUILD_DEPS $(perl -ne 'next if /^#/; $p=(s/^Build-Depends:\s*/ / or (/^ / and $p)); s/,|\n|\([^\)]+\)//mg; print if $p' < debian/control)
 ENV BUILD_DEPS alsa-utils \
